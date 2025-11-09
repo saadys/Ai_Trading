@@ -53,8 +53,8 @@ class Logger():
         Logger._get_logger().error(message)
     
     @staticmethod
-    def warning(message):
-        Logger._get_logger().warning(message)
+    def error(message):
+        Logger._get_logger().error(message)
 
     @staticmethod
     def critical(message):

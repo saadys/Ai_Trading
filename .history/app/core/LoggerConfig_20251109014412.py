@@ -1,0 +1,2 @@
+class LoggerConfig(logging.INFO):
+    

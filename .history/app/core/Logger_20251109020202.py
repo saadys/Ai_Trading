@@ -41,24 +41,7 @@ class Logger():
         return _logger_instance
 
     @staticmethod
-    def debug(message):
-        Logger._get_logger().debug(message)
-
-    @staticmethod
-    def info(message):
-        Logger._get_logger().info(message)
-
-    @staticmethod
-    def error(message):
-        Logger._get_logger().error(message)
     
-    @staticmethod
-    def warning(message):
-        Logger._get_logger().warning(message)
-
-    @staticmethod
-    def critical(message):
-        Logger._get_logger().critical(message)
 
 
 
