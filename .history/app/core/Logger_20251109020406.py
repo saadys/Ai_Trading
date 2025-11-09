@@ -52,9 +52,9 @@ class Logger():
     def error(message):
         Logger._get_logger().error(message)
     
-    @staticmethod
-    def warning(message):
-        Logger._get_logger().warning(message)
+        @staticmethod
+    def error(message):
+        Logger._get_logger().error(message)
 
     @staticmethod
     def critical(message):

@@ -1,0 +1,11 @@
+
+
+
+class LoggerConfig(logging.INFO):
+    def __init__(self,db_session):
+        _logger = None
+        self._logger = logging.getLogger(__name__)
+
+        
+        logger = logging.getLogger('trading_ai_logger')
+        logger.setLevel(log_level)
