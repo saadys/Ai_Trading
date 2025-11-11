@@ -10,7 +10,7 @@ class SQLAlchemyHandler(logging.Handler):
         super().__init__()
         self.session = session
 
-    def emit(self, record):
+    async def emit(self, record):
         """
         Écrit un enregistrement de log dans la base de données.
         """
