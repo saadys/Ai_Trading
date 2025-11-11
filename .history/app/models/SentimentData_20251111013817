@@ -1,0 +1,6 @@
+class SentimentData:
+    def __init__(self, symbol, timestamp, sentiment_score, sentiment_label):
+        self.symbol = symbol
+        self.timestamp = timestamp
+        self.sentiment_score = sentiment_score  # entre -1 et 1
+        self.sentiment_label = sentiment_label  # positif, negatif, neutre
