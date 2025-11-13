@@ -1,0 +1,3 @@
+pydantic-settings==2.11.0
+fastapi== 0.121.0
+websocket-client
