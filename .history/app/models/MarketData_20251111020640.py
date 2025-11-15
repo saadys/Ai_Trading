@@ -11,4 +11,4 @@ class MarketData:
         self.Close = Close
         self.Volume = Volume
     
-    def to_dict(self)-> dict
+    #def to_dict(self)-> dict
