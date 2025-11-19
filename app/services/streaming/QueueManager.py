@@ -1,6 +1,6 @@
 from aio_pika.abc import AbstractConnection, AbstractChannel, AbstractExchange, AbstractQueue
 from aio_pika import connect_robust, ExchangeType, Message
-from app.core.Config import get_settings
+from app.core.Config import Settings, get_settings
 from typing import Callable, Optional, Dict, Any
 from typing import Optional
 import aio_pika
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 class QueueManager:
     def __init__(self,settings = None):
-        self.settings = settings or get_settings()
+        self.settings = settings or Settings.get_settings()
 
         self.connection : Optional[AbstractConnection] = None
         self.channel : Optional[AbstractChannel] = None
