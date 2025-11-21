@@ -1,4 +1,4 @@
-from helpers.config import get_settings,Settings
+from app.core.Config import get_settings, Settings
 
 class BaseDataModel:
 
