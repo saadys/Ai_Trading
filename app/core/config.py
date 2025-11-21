@@ -1,4 +1,8 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+ENV_FILE = os.path.join(BASE_DIR, ".env")
 
 class Settings(BaseSettings):
 
@@ -11,10 +15,14 @@ class Settings(BaseSettings):
     Postgres_User : str = "postgres"
     Postgres_Password : str = "minirag222"
 
-    DEEPSEEK_API_KEY : str = "sk-334b053280444fc08bd37699116a7244"
-    OPENAI_API_KEY : str = "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"
-    QWEN_kEY : str = "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"
+    DEEPSEEK_API_KEY : str = ""
+    OPENAI_API_KEY : str = ""
+    QWEN_kEY : str = ""
     BINANCE_API_KEY : str = ""
+
+    model_config = SettingsConfigDict(env_file=ENV_FILE)
+
+
 
     RABBITMQ_DEFAULT_VHOST : str = "localhost"
     RABBITMQ_DEFAULT_USER: str = "myadmin"
