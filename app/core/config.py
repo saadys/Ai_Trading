@@ -1,8 +1,33 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-class Setting(BaseSettings):
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+ENV_FILE = os.path.join(BASE_DIR, ".env")
+
+class Settings(BaseSettings):
 
     NAME_APP : str = "Ai_Trading"
     APP_VERSION: str = "0.1.0"
 
-    
+    Postgres_Port : int = 5432
+    Postgres_DBName : str = "Ai_Trading"
+    Postgres_Host : str = "localhost"
+    Postgres_User : str = "postgres"
+    Postgres_Password : str = "minirag222"
+
+    DEEPSEEK_API_KEY : str = ""
+    OPENAI_API_KEY : str = ""
+    QWEN_kEY : str = ""
+    BINANCE_API_KEY : str = ""
+
+    model_config = SettingsConfigDict(env_file=ENV_FILE)
+
+
+
+    RABBITMQ_DEFAULT_VHOST : str = "localhost"
+    RABBITMQ_DEFAULT_USER: str = "myadmin"
+    RABBITMQ_DEFAULT_PASS:str = "mypassword"
+    #RABBITMQ_DEFAULT_PORTS: int = 5672
+
+def get_settings():
+    return Settings()
