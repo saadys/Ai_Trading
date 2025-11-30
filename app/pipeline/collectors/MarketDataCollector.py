@@ -1,5 +1,6 @@
 import sys
 import os
+
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../..'))
 
 
@@ -15,7 +16,6 @@ import json
 
 logger = logger()
 class MarketDataCollector:
-    
     def __init__(self, binancestream: BinanceStream, queuemanager: QueueManager, exchange_name: str):
         self.stream = binancestream
         self.queue = queuemanager
@@ -24,7 +24,7 @@ class MarketDataCollector:
         self.stream.on_message_callback = self._process_raw_message
 
 
-    async def _process_raw_message(self,message:str  ):
+    async def _process_raw_message(self,message:str ):
         try:
             message = json.loads(message)
             kline = message['k']
@@ -74,15 +74,4 @@ class MarketDataCollector:
     async def start_collecting(self):
         logger.info("Démarrage de la collecte des données de marché...")
         await self.stream.connect_to_binance_stream()
-        
-        
-        
-        
-        
-        
-        
-    
-         
-    
 
- 

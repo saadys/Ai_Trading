@@ -67,12 +67,13 @@ class QueueManager:
     
     async def _declare_exchanges(self):
         exchanges_config = {
-            'market_data_exchange': ExchangeType.TOPIC,# categoris les donnees(market_data.eurusd,market_data.btcusd)selon le "modèle de liaison" (binding pattern) correspond a routing key 
+            'market_data_exchange': ExchangeType.TOPIC, # categoris les donnees(market_data.eurusd,market_data.btcusd)selon le "modèle de liaison" (binding pattern) correspond a routing key 
             'indicator_exchange': ExchangeType.FANOUT,   
             'alert_exchange': ExchangeType.DIRECT    
         }
         
         for exchange_name, exchange_type in exchanges_config.items():
+
             exchange = await self.channel.declare_exchange(
                 exchange_name,
                 exchange_type,
@@ -133,14 +134,15 @@ class QueueManager:
             # 3. Créer le message RabbitMQ avec propriétés
             rabbitmq_message = Message(
                 message_bytes,
-                delivery_mode=2,  
+
+                delivery_mode=2,  # si RabbitMQ crash les donnees vont etre stocker dans le disque
                 timestamp=asyncio.get_event_loop().time()
             )
             
             exchange = self.exchanges.get(exchange_name)
             if not exchange:
                 raise ValueError(f"Exchange '{exchange_name}' not found. Call setup_broker() first.")
-            
+
             await exchange.publish(rabbitmq_message, routing_key=routing_key)
             
             logger.debug(f" Message published to '{exchange_name}' with key '{routing_key}'")
@@ -148,6 +150,7 @@ class QueueManager:
         except Exception as e:
             logger.error(f" Failed to publish message: {e}")
             raise
+
     async def consume(self, queue_name: str, on_message_callback: Callable[[Dict[str, Any]], None]):
         """
         Commence à consommer une queue. Interface simple pour les consommateurs.
@@ -162,21 +165,19 @@ class QueueManager:
         queue = self.queues.get(queue_name)
         if not queue:
             raise ValueError(f"Queue '{queue_name}' not found. Call setup_broker() first.")
+
         
         async def message_handler(message: aio_pika.IncomingMessage):
-            """Handler interne qui décode et traite chaque message."""
+            # IncomingMessage un objet qui contient : Body, headers, RoutingKey, 
             try:
-                # 1. Décoder de bytes en string
                 json_string = message.body.decode('utf-8')
                 
-                # 2. Parser le JSON en dictionnaire Python
                 message_data = json.loads(json_string)
                 
-                # 3. Appeler le callback du consommateur
                 await on_message_callback(message_data)
-                
-                # 4. Acquitter le message (confirmer la réception)
+                # confirmer la réception.
                 await message.ack()
+                await asyncio.sleep(1)
                 
                 logger.debug(f" Message processed from '{queue_name}'")
                 
@@ -190,6 +191,7 @@ class QueueManager:
         logger.info(f" Started consuming from '{queue_name}'")
 
     async def close(self):
+
         """
         Ferme proprement la connexion RabbitMQ.
         À appeler lors de l'arrêt de l'application.
@@ -202,6 +204,7 @@ class QueueManager:
             logger.error(f" Error closing RabbitMQ connection: {e}")
 
     async def health_check(self) -> bool:
+
         """
         Vérifie si la connexion RabbitMQ est saine.
         Utile pour les health checks de l'application.
