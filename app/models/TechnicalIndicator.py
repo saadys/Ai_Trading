@@ -1,4 +1,4 @@
-class TechnicalIndicator:
+class TechnicalIndicator(BaseDataModel):
     """
     Calcule des indicateurs technique 
     """

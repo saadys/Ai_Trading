@@ -25,3 +25,30 @@ export PS1="\[\033[01;32m\][\u@\h:\w]\[\033[00m\]\n\$ "
 ## How It's Made:
 
 **Tech used:** Python, Docker, Postgres,SQlAlchemy
+
+## Configuration
+
+### Services Requis
+Le projet necessite RabbitMQ et PostgreSQL. Assurez-vous qu'ils sont installés et en cours d'execution.
+
+### Variables d'Environnement
+Creez un fichier .env a la racine du projet avec les informations suivantes:
+
+```env
+DATABASE_URL=postgresql+asyncpg://user:password@localhost/trading_db
+RABBITMQ_URL=amqp://guest:guest@localhost/
+BINANCE_API_KEY=votre_cle
+BINANCE_SECRET_KEY=votre_secret
+```
+
+## Lancement
+
+1. Installer les dependances :
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. Lancer l'application :
+   ```bash
+   uvicorn main:app --reload
+   ```
