@@ -22,7 +22,7 @@ class Log(SQLAlchemyBase):
     funcName = Column(String)
     lineNo = Column(Integer)
 
-    pass
+    
 
 
     

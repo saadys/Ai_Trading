@@ -1,7 +1,7 @@
 from datetime import datetime
 
 
-class MarketData:
+class MarketData(BaseDataModel):
     def __init__(self, open_time:datetime, symbol:str, open_price:float, high_price:float, low_price:float, close_price:float, volume:float, is_closed:bool = False, close_time:datetime = None, exchange_name:str = None):
         self.open_time = open_time
         self.symbol = symbol

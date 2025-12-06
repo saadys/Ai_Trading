@@ -53,12 +53,17 @@ class MarketDataCollector:
                     volume = validated_data.volume,
                     close_time=validated_data.close_time,
                     is_closed=validated_data.is_closed,
-                    exchange=self.exchange_name
+                    exchange_name=self.exchange_name
             )
+
+            envolloppe = {
+                "type" : "OHLCV",
+                "payload" : market_data.to_dict()
+            }
 
             await self.queue.publish(
                 exchange_name='market_data_exchange',
-                message=market_data.to_dict(), 
+                message=envolloppe, 
                 routing_key='market_data.*'
             )
 

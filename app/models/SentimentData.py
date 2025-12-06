@@ -1,5 +1,5 @@
 
-class SentimentData:
+class SentimentData(BaseDataModel):
     def __init__(self, symbol, timestamp, sentiment_score, sentiment_label):
         self.symbol = symbol
         self.timestamp = timestamp

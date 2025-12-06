@@ -69,9 +69,15 @@ class QueueManager:
         exchanges_config = {
             'market_data_exchange': ExchangeType.TOPIC, # categoris les donnees(market_data.eurusd,market_data.btcusd)selon le "modèle de liaison" (binding pattern) correspond a routing key 
             'indicator_exchange': ExchangeType.FANOUT,   
+<<<<<<< HEAD
             'alert_exchange': ExchangeType.DIRECT    
+=======
+            # Type DIRECT : Tri strict. La clé doit correspondre exactement (ex: "error" va dans "error_queue").
+            'alert_exchange': ExchangeType.DIRECT,
+            # Exchange pour les messages morts (DLX)
+            'dlx_exchange': ExchangeType.DIRECT
+>>>>>>> c0f2d1f (feat: Implement streaming market data collection, processing, and persistence pipeline with new models, services, and tests.)
         }
-        
         for exchange_name, exchange_type in exchanges_config.items():
 
             exchange = await self.channel.declare_exchange(
@@ -90,14 +96,24 @@ class QueueManager:
             'database_saver_queue', 
             'context_aggregator_queue',
             'alert_queue',          
-            'backtest_queue'       
+            'backtest_queue',
+            'dead_letter_queue'
         ]
         
         for queue_name in queues_config:
+            arguments = {'x-message-ttl': 3600000}
+            
+            # Configuration spécifique pour la queue de sauvegarde (DLQ)
+            if queue_name == 'database_saver_queue':
+                arguments.update({
+                    'x-dead-letter-exchange': 'dlx_exchange',
+                    'x-dead-letter-routing-key': 'dead_message'
+                })
+
             queue = await self.channel.declare_queue(
                 queue_name,
                 durable=True,  
-                arguments={'x-message-ttl': 3600000}  
+                arguments=arguments  
             )
             self.queues[queue_name] = queue
             logger.info(f" Queue '{queue_name}' declared")
@@ -111,7 +127,10 @@ class QueueManager:
             
             ('indicator_exchange', 'alert_queue', ''),
             
-            ('alert_exchange', 'alert_queue', 'high_priority')
+            ('alert_exchange', 'alert_queue', 'high_priority'),
+
+            # Binding pour la Dead Letter Queue
+            ('dlx_exchange', 'dead_letter_queue', 'dead_message')
         ]
         
         for exchange_name, queue_name, routing_key in bindings:
@@ -203,7 +222,7 @@ class QueueManager:
         except Exception as e:
             logger.error(f" Error closing RabbitMQ connection: {e}")
 
-    async def health_check(self) -> bool:
+    async def health_check(self):
 
         """
         Vérifie si la connexion RabbitMQ est saine.

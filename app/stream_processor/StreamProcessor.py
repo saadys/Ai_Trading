@@ -1,11 +1,9 @@
-import sys
-import os
-import asyncio
-
-sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
-
 from app.models.enums.SymbolEnum import SymbolEnum
 from app.core.Logger import Logger
+import asyncio
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 
 logger = Logger
 
