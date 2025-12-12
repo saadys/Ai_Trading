@@ -11,11 +11,11 @@ class Settings(BaseSettings):
     NAME_APP : str = "Ai_Trading"
     APP_VERSION: str = "0.1.0"
 
-    Postgres_Port : int = 5432
+    Postgres_Port : int = 5433
     Postgres_DBName : str = "Ai_Trading"
     Postgres_Host : str = "localhost"
     Postgres_User : str = "postgres"
-    Postgres_Password : str = "minirag222"
+    Postgres_Password : str = "miniTrading222"
 
     DEEPSEEK_API_KEY : str = ""
     OPENAI_API_KEY : str = ""

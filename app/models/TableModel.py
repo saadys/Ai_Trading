@@ -13,7 +13,7 @@ class TableModel(BaseDataModel):
 
     
     async def save_ohlcv_batch(self,message:List[dict]):
-        async with self.database_client.get_session() as session:
+        async with self.database_client() as session:
             async with session.begin():
                     ohlcv_batch = []
                     for payload in message:

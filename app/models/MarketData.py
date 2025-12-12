@@ -1,5 +1,5 @@
 from datetime import datetime
-
+from app.models.BaseDataModel import BaseDataModel
 
 class MarketData(BaseDataModel):
     def __init__(self, open_time:datetime, symbol:str, open_price:float, high_price:float, low_price:float, close_price:float, volume:float, is_closed:bool = False, close_time:datetime = None, exchange_name:str = None):
