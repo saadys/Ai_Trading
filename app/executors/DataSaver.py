@@ -40,3 +40,11 @@ class DataSaver:
                 logger.info(f"Batch full ({self.batch_size} items). Saving to DB...")
                 await self.table_model.save_ohlcv_batch(self.ohlcv_batch)
                 self.ohlcv_batch = [] 
+        
+        elif message.get("type") == "INDICATOR":
+            self.indicator_batch.append(message["payload"])
+            
+            if len(self.indicator_batch) >= self.batch_size:
+                logger.info(f"Batch full ({self.batch_size} items). Saving to DB...")
+                await self.table_model.save_indicator_batch(self.indicator_batch)
+                self.indicator_batch = []

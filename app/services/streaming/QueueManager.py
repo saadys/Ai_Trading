@@ -185,7 +185,7 @@ class QueueManager:
                 await on_message_callback(message_data)
                 # confirmer la réception.
                 await message.ack()
-                await asyncio.sleep(1)
+                #await asyncio.sleep(1)
                 
                 logger.debug(f" Message processed from '{queue_name}'")
                 
