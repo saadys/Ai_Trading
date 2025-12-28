@@ -1,6 +1,8 @@
 from app.core.Logger import Logger, logger
 from app.services.streaming.QueueManager import QueueManager
 from app.models.enums.SymbolEnum import SymbolEnum
+from app.services.streaming.IndicatorValidator import IndicatorValidator
+from pydantic import ValidationError
 from collections import deque
 import numpy as np
 import talib
@@ -15,7 +17,6 @@ class IndicatorService:
     def __init__(self, queue_manager: QueueManager, symbol: SymbolEnum):
         self.queue = queue_manager
         self.symbol = symbol.value
-        # Buffers pour OHLC (Open, High, Low, Close) - Deque gère le 'pop' automatiquement
         self.prices_buffer = deque(maxlen=250)
         self.highs_buffer = deque(maxlen=250)
         self.lows_buffer = deque(maxlen=250)
@@ -115,14 +116,14 @@ class IndicatorService:
                         "payload" : validated_data.dict()
                     }
                     await self.queue.publish(
-                        exchange_name='market_data_exchange', # CORRECTED: Must publish to an EXCHANGE, not a queue
+                        exchange_name='market_data_exchange', 
                         message=envolloppe, 
-                        routing_key='market_data.indicator' # Dedicated routing key
+                        routing_key='market_data.indicator' 
                     )                    
                 except ValidationError as e:
-                    logger.error(f"error validation: {e}")
+                    logger.error(f"Error validating indicators: {e}")
                 
         except ValueError as e:
-            logger.error(f"error conversion: {e}")
+            logger.error(f"error converting prices: {e}")
         except Exception as e:
-            logger.error(f"error process_message: {e}")
+            logger.error(f"Error in IndicatorService.process_message: {e}")

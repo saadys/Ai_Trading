@@ -88,12 +88,12 @@ class QueueManager:
             logger.info(f" Exchange '{exchange_name}' ({exchange_type.value}) declared")
 
     async def _declare_queues(self):
-        """Déclare toutes les queues nécessaires."""
         queues_config = [
             'indicator_queue',     
             'database_saver_queue', 
             'context_aggregator_queue',
-            'alert_queue',          
+            'alert_queue',
+            'sentiment_queue',          
             'backtest_queue',
             'dead_letter_queue'
         ]
@@ -121,6 +121,7 @@ class QueueManager:
             ('market_data_exchange', 'indicator_queue', 'market_data.*'),
             ('market_data_exchange', 'database_saver_queue', 'market_data.*'),
             ('market_data_exchange', 'context_aggregator_queue', 'market_data.*'),
+            ('market_data_exchange', 'sentiment_queue', 'market_data.*'),
 
             
             ('indicator_exchange', 'alert_queue', ''),
@@ -148,7 +149,7 @@ class QueueManager:
             
             message_bytes = json_message.encode('utf-8')
             
-            # 3. Créer le message RabbitMQ avec propriétés
+            # 3. Créer le message RabbitMQ 
             rabbitmq_message = Message(
                 message_bytes,
                 delivery_mode=2,  # si RabbitMQ crash les donnees vont etre stocker dans le disque
@@ -176,14 +177,12 @@ class QueueManager:
             raise ValueError(f"Queue '{queue_name}' not found. Call setup_broker() first.")
     
         async def message_handler(message: aio_pika.IncomingMessage):
-            # IncomingMessage un objet qui contient : Body, headers, RoutingKey, 
             try:
                 json_string = message.body.decode('utf-8')
                 
                 message_data = json.loads(json_string)
                 
                 await on_message_callback(message_data)
-                # confirmer la réception.
                 await message.ack()
                 #await asyncio.sleep(1)
                 

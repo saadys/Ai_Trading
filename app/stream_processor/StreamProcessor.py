@@ -31,7 +31,6 @@ class StreamProcessor:
         except Exception as e:
             logger.error(f"Error during initialization QueueManager: {e}")
 
-        # On branche le callback vers notre buffer
         self.binancestream.on_message_callback = self._buffer_message
 
         logger.info("Initialization complete. System ready.")
@@ -56,7 +55,7 @@ class StreamProcessor:
                 
             except Exception as e:
                 logger.error(f"An error occurred in processing loop: {e}")
-                await asyncio.sleep(1) # Petite pause en cas d'erreur pour éviter le spam
+                await asyncio.sleep(1) 
 
     async def stop(self):
         try:

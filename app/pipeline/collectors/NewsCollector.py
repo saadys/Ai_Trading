@@ -4,7 +4,7 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../..'))
 
 from app.services.streaming.QueueManager import QueueManager
-from app.models.pydantic.NewsArticle import NewsArticle
+from app.models.pydantic.NewsCollectorValidator import NewsCollectorValidator
 from pydantic import ValidationError
 import asyncio
 from newsdataapi import NewsDataApiClient
@@ -25,9 +25,8 @@ class NewsCollector:
                 
                 for raw in raw_articles:
                     try:
-                        # Validation (Input)
                         from datetime import datetime
-                        article = NewsArticle(
+                        article = NewsCollectorValidator(
                             article_id=raw.get('article_id'),
                             title=raw.get('title'),
                             link=raw.get('link'),
@@ -38,12 +37,16 @@ class NewsCollector:
                             symbol='BTC', 
                             timestamp=datetime.now()
                         )
+                        envolloppe = {
+                            "type" : "Data_News",
+                            "payload" : article.to_dict()
+                        }
                         
                         if self.queuemanager:
                             await self.queuemanager.publish(
                                 exchange_name=self.exchange_name,
-                                message=article.dict(),
-                                routing_key='news.btc'
+                                message=envolloppe,
+                                routing_key='market_data.news.btc'
                             )
                             logger.info(f"Published article: {article.title[:30]}...")
                             

@@ -11,7 +11,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 from app.pipeline.collectors.NewsCollector import NewsCollector
 from app.services.streaming.QueueManager import QueueManager
 from app.core.Logger import Logger, LoggerConfig
-from app.models.pydantic.NewsArticle import NewsArticle
+from app.models.pydantic.NewsCollectorValidator import NewsCollectorValidator
 from pydantic import ValidationError
 from datetime import datetime
 
@@ -41,7 +41,7 @@ async def test_news_collector():
         Logger.info(f"\nTraitement Article {i+1}:")
         try:
             # Validation via le modèle Pydantic NewsArticle
-            article = NewsArticle(
+            article = NewsCollectorValidator(
                 article_id=raw.get('article_id'),
                 title=raw.get('title'),
                 link=raw.get('link'),
@@ -55,6 +55,9 @@ async def test_news_collector():
             Logger.info(f"  [VALIDE] Titre: {article.title[:50]}...")
             Logger.info(f"  Source: {article.source_id} | Date: {article.pub_date}")
             Logger.info(f"  ID: {article.article_id} | Categories: {article.categories}")
+            Logger.info(f"  Lien: {article.link}")
+            Logger.info(f"  Contenu: {article.content[:100] if article.content else 'N/A'}...")
+            Logger.info(f"  Symbol: {article.symbol} | Collection Time: {article.timestamp}")
         except ValidationError as e:
             Logger.error(f"  [ERREUR VALIDATION] Article {i+1}: {e}")
 

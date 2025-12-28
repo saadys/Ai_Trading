@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
 
-class NewsArticle(BaseModel):
+class NewsCollectorValidator(BaseModel):
 
     article_id: Optional[str] = Field(None, alias="article_id")
     title: str = Field(..., description="Titre de la news")
