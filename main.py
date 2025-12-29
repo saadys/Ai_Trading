@@ -3,8 +3,10 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from core.Config import Settings, get_settings
 from sqlalchemy.orm import sessionmaker
 from fastapi import FastAPI
-
-
+from processors.SentimentProcessor.SentimentStrategypattern import SentimentStrategyFinbert
+from processors.SentimentProcessor.SentimentProcessor import SentimentProcessor
+from processors.SentimentProcessor.SentimentProviderFactory import SentimentStrategyFactory
+from processors.SentimentProcessor.SentimentEnum import SentimentStrategy
 app = FastAPI() 
 settings = get_settings()
 
@@ -37,17 +39,26 @@ async def startup_event(app: FastAPI):
         
         socket_url = f"wss://stream.binance.com:9443/ws/{symbol_value}@kline_{interval_value}"
         binance_stream = BinanceStream(socket_url)
+
         data_collector = MarketDataCollector(binance_stream, app.queue_manager, "Binance")
+
         app.stream_processor = StreamProcessor(symbol_value.upper(), binance_stream, data_collector)
         await app.stream_processor.initialisation()
         Logger.info(f"StreamProcessor initialisé pour {symbol_value.upper()}.")
+        asyncio.create_task(app.stream_processor.start())
         
         app.indicator_service = IndicatorService(app.queue_manager, SymbolEnum.BTCUSDT)
         Logger.info(f"IndicatorService initialisé pour {symbol_value.upper()}.")
-        
-        asyncio.create_task(app.stream_processor.start())
         asyncio.create_task(app.indicator_service.calculate_indicators())
         Logger.info(f"Flux et calcul d'indicateurs lancés pour {symbol_value.upper()}.")
+
+        # La partie Sentiment :
+        strategy_type = SentimentStrategy.FINBERT.value
+        app.sentiment_processor = SentimentProcessor(app.queue_manager, SentimentStrategyFactory.get_strategy(strategy_type), app.database_client)
+        asyncio.create_task(app.sentiment_processor.start())
+        Logger.info("SentimentProcessor démarré.")
+
+
 
     except Exception as e:
         Logger.error(f"Erreur critique lors du démarrage : {str(e)}")

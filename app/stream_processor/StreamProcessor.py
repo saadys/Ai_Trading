@@ -66,10 +66,8 @@ class StreamProcessor:
             self.binancestream.on_message_callback = None
             await self.binancestream.disconnect()
             
-            # 3. DRAINAGE : Attendre que le buffer soit vide
             if not self.internal_buffer.empty():
                 logger.info(f"Draining buffer... {self.internal_buffer.qsize()} messages remaining.")
-                # On attend que tous les items mis dans la queue soient marqués 'task_done'
                 await self.internal_buffer.join()
             
             logger.info(f"StreamProcessor for {self.symbol} stopped successfully.")
