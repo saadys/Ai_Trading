@@ -18,7 +18,6 @@ class TableModel(BaseDataModel):
             async with session.begin():
                 ohlcv_batch = []
                 for payload in message:
-                    # Convert string dates to datetime objects if they are strings
                     if isinstance(payload.get('open_time'), str):
                         try:
                             payload['open_time'] = datetime.fromisoformat(payload['open_time'].replace('Z', '+00:00'))

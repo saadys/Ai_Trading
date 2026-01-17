@@ -4,6 +4,7 @@ websocket-client==1.9.0
 asyncio==3.4.3
 aio-pika==9.5.8
 SQLAlchemy==2.0.44
+alembic==1.18.1
 TA-Lib==0.6.8
 asyncpg==0.29.0
 uvicorn==0.27.1

@@ -6,6 +6,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../../..'))
 from app.services.streaming.QueueManager import QueueManager
 from app.models.pydantic.NewsCollectorValidator import NewsCollectorValidator
 from pydantic import ValidationError
+from datetime import datetime
 import asyncio
 from newsdataapi import NewsDataApiClient
 from app.core.Logger import Logger, logger
@@ -25,7 +26,6 @@ class NewsCollector:
                 
                 for raw in raw_articles:
                     try:
-                        from datetime import datetime
                         article = NewsCollectorValidator(
                             article_id=raw.get('article_id'),
                             title=raw.get('title'),

@@ -13,11 +13,16 @@ class Settings(BaseSettings):
 
 ############################## Config DB ##############################
 
-    Postgres_Port : int = 5433
+    #Postgres_Port : int = 5433
+    #Postgres_DBName : str = "postgres" #"Ai_Trading"
+    #Postgres_Host : str = "localhost"
+    #Postgres_User : str = "postgres"
+    #Postgres_Password : str = "saadys"
+    Postgres_Port : int = 5432
     Postgres_DBName : str = "Ai_Trading"
     Postgres_Host : str = "localhost"
     Postgres_User : str = "postgres"
-    Postgres_Password : str = "miniTrading222"
+    Postgres_Password : str = "saadys"
 
 ############################## Config LLMS ##############################
 
