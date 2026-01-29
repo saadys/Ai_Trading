@@ -7,10 +7,10 @@ class LABELING:
         self.future_window = future_window
     
     def calculate_q_labels(self, data: pd.DataFrame) -> pd.DataFrame:
-        closes = data['Close_diff'].values
-        highs = data['High_diff'].values
-        lows = data['Low_diff'].values
-        opens = data['Open_diff'].values
+        closes = data['Close'].values
+        highs = data['High'].values
+        lows = data['Low'].values
+        opens = data['Open'].values
         
         # Check if Volume exists
         if 'Volume' in data.columns:

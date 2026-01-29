@@ -16,14 +16,17 @@ newsdataapi==0.1.29
 websockets==15.0.1
 
 transformers==4.57.3
-torch==2.9.1
+--extra-index-url https://download.pytorch.org/whl/cu129
+torch==2.8.0+cu129
+torchvision==0.23.0+cu129
+torchaudio==2.8.0+cu129
 
 scikit-learn==1.7.0
 
 vmdpy==0.2
 
-
-
+mlflow==3.8.1
+psycopg2-binary==2.9.11
 
 
 

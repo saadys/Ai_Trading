@@ -1,0 +1,23 @@
+artifact_path: file:///C:/Users/saady/Documents/project_trading_ai/Ai_Trading/app/MLearning/Training/mlruns/1/models/m-f4e85be54774454d9ddfe428bc1a9312/artifacts
+flavors:
+  python_function:
+    config:
+      device: null
+    data: data
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.pytorch
+    pickle_module_name: mlflow.pytorch.pickle_module
+    python_version: 3.10.0
+  pytorch:
+    code: null
+    model_data: data
+    pytorch_version: 2.8.0+cu129
+mlflow_version: 3.8.1
+model_id: m-f4e85be54774454d9ddfe428bc1a9312
+model_size_bytes: 1356715
+model_uuid: m-f4e85be54774454d9ddfe428bc1a9312
+prompts: null
+run_id: 0cc2865dd7274beb881a80e16b459eac
+utc_time_created: '2026-01-29 22:19:30.303693'
