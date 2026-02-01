@@ -3,10 +3,6 @@ from typing import Optional
 from datetime import datetime
 
 class IndicatorValidator(BaseModel):
-    """
-    Validateur strict pour les indicateurs techniques.
-    Empêche les valeurs aberrantes de corrompre la DB ou la stratégie.
-    """
     symbol: str = Field(..., description="Symbole de la paire (ex: BTCUSDT)")
     timestamp: datetime = Field(default_factory=datetime.now)
     

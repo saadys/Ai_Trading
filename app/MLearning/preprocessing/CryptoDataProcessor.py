@@ -3,8 +3,7 @@ import pandas as pd
 import numpy as np
 import joblib
 import argparse
-import joblib
-import argparse
+import talib
 from sklearn.preprocessing import RobustScaler, MinMaxScaler
 from typing import Tuple, List, Optional
 from .LABELING import LABELING
@@ -62,6 +61,70 @@ class CryptoDataProcessor:
             data['month_sin'] = np.sin(2 * np.pi * (months - 1) / 12)
             data['month_cos'] = np.cos(2 * np.pi * (months - 1) / 12)
             
+        return data
+
+    def calculate_technical_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Calculates exact technical indicators as defined in IndicatorValidator/IndicatorService.
+        """
+        print("Calculating technical indicators (Production Parity)...")
+        data = df.copy()
+        
+        # Ensure inputs are float and numpy arrays for talib
+        closes = data['Close'].values.astype(float)
+        highs = data['High'].values.astype(float)
+        lows = data['Low'].values.astype(float)
+        
+        # --- Trend Indicators (EMA) ---
+        data['ema_20'] = talib.EMA(closes, timeperiod=20)
+        data['ema_50'] = talib.EMA(closes, timeperiod=50)
+        data['ema_200'] = talib.EMA(closes, timeperiod=200)
+        
+        # --- Momentum Indicators (RSI) ---
+        data['rsi_14'] = talib.RSI(closes, timeperiod=14)
+        
+        # --- Volatility Indicators (ATR) ---
+        data['atr_14'] = talib.ATR(highs, lows, closes, timeperiod=14)
+        
+        # --- MACD ---
+        macd, macd_signal, macd_hist = talib.MACD(
+            closes, 
+            fastperiod=12, 
+            slowperiod=26, 
+            signalperiod=9
+        )
+        data['macd_line'] = macd
+        data['macd_signal'] = macd_signal
+        data['macd_hist'] = macd_hist
+        
+        return data
+
+    def create_positional_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Transforms raw indicators into 'Positional Context' features to solve Model Collapse.
+        """
+        print("Creating Positional Context features...")
+        data = df.copy()
+        
+        epsilon = 1e-9
+        
+        # 1. Log-Distances to EMAs (Price Position)
+        data['dist_ema_20'] = np.log((data['Close'] + epsilon) / (data['ema_20'] + epsilon))
+        data['dist_ema_50'] = np.log((data['Close'] + epsilon) / (data['ema_50'] + epsilon))
+        # Handle potential NaNs in EMA200 by filling or just letting dropna handle it later
+        data['dist_ema_200'] = np.log((data['Close'] + epsilon) / (data['ema_200'] + epsilon))
+        
+        # 2. Normalized RSI
+        data['rsi_norm'] = data['rsi_14'] / 100.0
+        
+        # 3. Normalized ATR (Volatility Ratio)
+        data['atr_ratio'] = data['atr_14'] / data['Close']
+        
+        # 4. Normalized MACD
+        data['macd_norm'] = data['macd_line'] / data['Close']
+        data['macd_sig_norm'] = data['macd_signal'] / data['Close']
+        data['macd_hist_norm'] = data['macd_hist'] / data['Close']
+        
         return data
 
         #def calculate_q_labels(self, data: pd.DataFrame) -> pd.DataFrame:
@@ -142,29 +205,59 @@ class CryptoDataProcessor:
         print("Scaling features...")
         data = df.copy()
         
+        # Define the Final Feature Set for the Model
+        # We focus on the NEW positional features + Seasonal
         features = [
-            'Open_diff', 'High_diff', 'Low_diff', 'Close_diff', 'Volume',
-            'hour_sin', 'hour_cos', 'day_of_week_sin', 'day_of_week_cos', 
-            'month_sin', 'month_cos'
+            # Base Features (Stationarized)
+            'Open_diff', 'High_diff', 'Low_diff', 'Close_diff','Volume'
+
+            # Positional / Context Features
+            'dist_ema_20', 'dist_ema_50', 'dist_ema_200',
+            'rsi_norm', 
+            'atr_ratio',
+            'macd_norm', 'macd_sig_norm', 'macd_hist_norm',
+            
+            # Seasonal Features (Cyclical encoding)
+            'hour_sin', 'hour_cos', 
+            'day_of_week_sin', 'day_of_week_cos', 
+            'month_sin', 'month_cos',
+            
+            # Volume Log (still useful)
+             'Volume_log'
         ]
         
-        available_features = [f for f in features if f in data.columns]
         if 'Volume' in data.columns:
-            data['Volume'] = np.log1p(data['Volume'])
-            
-        data[available_features] = self.scaler.fit_transform(data[available_features])
+             data['Volume_log'] = np.log1p(data['Volume'])
+        
+        # Check what's available
+        # Separate numeric features for scaling
+        numeric_features = [f for f in features if f in data.columns]
+        
+        # Add metadata features explicitly requested by user
+        meta_features = ['Open time', 'Close time']
+        available_meta = [f for f in meta_features if f in data.columns]
+        
+        print(f"Selected numeric features for scaling: {numeric_features}")
+        print(f"Selected metadata features: {available_meta}")
+        
+        # Use RobustScaler to handle outliers in the distributions
+        if numeric_features:
+            data[numeric_features] = self.scaler.fit_transform(data[numeric_features])
         
         print(f"Saving scaler to {self.scaler_path}...")
         joblib.dump(self.scaler, self.scaler_path)
         
-        X_scaled = data[available_features].values
+        # Combine features: Numeric first, then Meta (or order as preferred)
+        # User wants them in the CSV.
+        final_columns = numeric_features + available_meta
+        X_scaled = data[final_columns].values
         
         if 'Label_Q_Standard' in data.columns:
             y_labels = data['Label_Q_Standard'].values
         else:
             y_labels = np.zeros(len(data))
         
-        return X_scaled, y_labels, available_features
+        return X_scaled, y_labels, final_columns
 
     def create_sequences(self, X: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         print(f"Creating sequences (lookback={self.lookback})...")
@@ -235,18 +328,26 @@ class CryptoDataProcessor:
     def run_pipeline(self, input_path: str, output_dir: str):
         df = self.load_data(input_path)
         
+        # 1. Feature Engineering
         df = self.add_Seasonal_features(df)
+        df = self.calculate_technical_indicators(df)
+        df = self.create_positional_features(df)
         
-        
+        # 2. Labeling
         df = self.labeler.calculate_q_labels(df)
         
+        # 3. Cleaning
+        # Drop NaN from both diffs (first row) and Indicators (first 200 rows for EMA200)
         df_clean = df.dropna().reset_index(drop=True)
         print(f"Data shape after cleaning: {df_clean.shape}")
         
+        # 4. Scaling
         X_scaled, y_labels, cols = self.scale_features(df_clean)
         
+        # 5. Sequencing
         X_seq, y_seq = self.create_sequences(X_scaled, y_labels)
         
+        # 6. Splitting
         splits = self.split_and_balance(X_seq, y_seq)
         
         os.makedirs(output_dir, exist_ok=True)
@@ -254,6 +355,9 @@ class CryptoDataProcessor:
         for name, arr in splits.items():
             np.save(os.path.join(output_dir, f"{name}.npy"), arr)
             print(f"Saved {name}: {arr.shape}")
+        
+        # Save feature list for inference reference
+        joblib.dump(cols, os.path.join(output_dir, "feature_names.pkl"))
             
         print("Pipeline completed successfully.")
 
