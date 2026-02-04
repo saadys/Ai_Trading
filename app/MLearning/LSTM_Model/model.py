@@ -3,7 +3,7 @@ import torch.nn as nn
 from .Config import Config
 
 class LSTM_Production_Model(nn.Module):
-    def __init__(self, input_size: int, hidden_size: int = 128, num_layers: int = 3, dropout: float = 0.2):
+    def __init__(self, input_size: int = 21, hidden_size: int = 128, num_layers: int = 3, dropout: float = 0.2):
         super(LSTM_Production_Model, self).__init__()
         
         self.hidden_size = hidden_size
@@ -22,9 +22,9 @@ class LSTM_Production_Model(nn.Module):
         self.fc = nn.Linear(hidden_size, 1)
         
     def forward(self, x):
-        # x shape: (Batch, Seq, Input)
+        # x shape: (Batch, Seq, Feature=21)
         
-        # LSTM output: (Batch, Seq, Hidden)
+        # LSTM output:(Batch, Seq, Hidden)
         out, _ = self.lstm(x)
         
         # We only care about the last time step for prediction

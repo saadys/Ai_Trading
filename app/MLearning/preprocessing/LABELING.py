@@ -12,7 +12,6 @@ class LABELING:
         lows = data['Low'].values
         opens = data['Open'].values
         
-        # Check if Volume exists
         if 'Volume' in data.columns:
             volumes = data['Volume'].values
         else:

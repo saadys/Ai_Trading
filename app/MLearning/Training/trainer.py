@@ -1,5 +1,9 @@
 import sys
 import os
+
+# Fix OpenMP runtime error: initializing libiomp5md.dll, but found libiomp5md.dll already initialized
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
 
 import torch
@@ -23,7 +27,7 @@ from sklearn.preprocessing import RobustScaler
 import mlflow
 
 mlflow.set_tracking_uri("postgresql+psycopg2://postgres:saadys@localhost:5432/mlflow_db")
-mlflow.set_experiment("Model LSTM V1")
+mlflow.set_experiment("Model LSTM V2")
 mlflow.config.enable_system_metrics_logging()
 mlflow.config.set_system_metrics_sampling_interval(1)
 
@@ -210,135 +214,159 @@ class Trainer:
         torch.save(quantized_model.state_dict(), save_path)
         return quantized_model
 
-class AdvancedDataPipeline:
-    def __init__(self, parquet_path: str, lookback: int = 96, batch_size: int = 32):
-        self.parquet_path = parquet_path
+class NewDataPipeline:
+    def __init__(self, csv_path: str, lookback: int = 96, batch_size: int = 32):
+        self.csv_path = csv_path
         self.lookback = lookback
         self.batch_size = batch_size
-        self.scaler = RobustScaler()
-        self.target_scaler = RobustScaler() 
-        self.feature_cols = [
-            'Open_diff', 'High_diff', 'Low_diff', 'Close_diff', 'Volume',
-            'hour_sin', 'hour_cos', 'day_of_week_sin', 'day_of_week_cos', 
-            'month_sin', 'month_cos', 'VMD_Mode1', 'VMD_Mode2', 'VMD_Mode3'
-        ]
-        self.target_col = 'Label_Q_Standard'
-
-    def load_and_prep(self) -> Tuple[DataLoader, DataLoader, DataLoader, int]:
-        print(f"Loading parquet from {self.parquet_path}...")
-        try:
-            df = pd.read_parquet(self.parquet_path)
-        except Exception as e:
-            print(f"Error reading parquet file: {e}")
-            raise
-
-        initial_len = len(df)
-        df = df.dropna()
-        dropped_len = len(df)
-        print(f"Dropped {initial_len - dropped_len} row(s) containing NaNs.")
         
-        if dropped_len == 0:
-            raise ValueError("All data dropped! Check your data source.")
-
-        missing_cols = [c for c in self.feature_cols if c not in df.columns]
-        if missing_cols:
-            print(f"Warning: Missing columns {missing_cols}. Ignoring them.")
-            self.feature_cols = [c for c in self.feature_cols if c in df.columns]
-
-        #Time Series Split
-        n = len(df)
-        train_idx = int(n * 0.8)
-        val_idx = int(n * 0.9)
-
-        # Split features into those needing scaling vs passthrough (cyclic)
-        scale_cols = [
-            'Open_diff', 'High_diff', 'Low_diff', 'Close_diff', 'Volume',
+        # Exact Feature Mapping (Order matters for inference consistency)
+        # Total Features: 21 (18 Base + 3 VMD)
+        self.feature_cols = [
+            # Price Dynamics (4)
+            'Open_diff', 'High_diff', 'Low_diff', 'Close_diff',
+            # Positional Context (7)
+            'dist_ema_50', 'dist_ema_200', 'rsi_norm', 'atr_ratio', 
+            'macd_norm', 'macd_sig_norm', 'macd_hist_norm',
+            # Seasonality (6)
+            'hour_sin', 'hour_cos', 'day_of_week_sin', 'day_of_week_cos', 
+            'month_sin', 'month_cos',
+            # Volume (1)
+            'Volume_log',
+            # VMD Modes (3)
             'VMD_Mode1', 'VMD_Mode2', 'VMD_Mode3'
         ]
-        passthrough_cols = [
-            'hour_sin', 'hour_cos', 'day_of_week_sin', 'day_of_week_cos', 
-            'month_sin', 'month_cos'
-        ]
+        self.target_col = 'Target'
+
+    def load_and_prep(self) -> Tuple[DataLoader, DataLoader, DataLoader, int]:
+        print(f"Loading final dataset from {self.csv_path}...")
+        try:
+            df = pd.read_csv(self.csv_path)
+        except Exception as e:
+            print(f"Error reading CSV file: {e}")
+            raise
+
+        # Check for missing features
+        missing = [c for c in self.feature_cols if c not in df.columns]
+        if missing:
+            raise ValueError(f"Missing required features in CSV: {missing}")
+
+        # Ensure Time is datetime for Gap Detection
+        if 'Open time' not in df.columns:
+             raise ValueError("'Open time' column required for gap detection.")
         
-        # Ensure all columns are present
-        scale_cols = [c for c in scale_cols if c in self.feature_cols]
-        passthrough_cols = [c for c in passthrough_cols if c in self.feature_cols]
-
-        # Prepare Raw splits
-        X_train_raw = df.iloc[:train_idx]
-        X_val_raw = df.iloc[train_idx:val_idx]
-        X_test_raw = df.iloc[val_idx:]
-
-        y_train_raw = df[self.target_col].iloc[:train_idx].values.reshape(-1, 1)
-        y_val_raw = df[self.target_col].iloc[train_idx:val_idx].values.reshape(-1, 1)
-        y_test_raw = df[self.target_col].iloc[val_idx:].values.reshape(-1, 1)
-
-        print("Fitting scalers on training data...")
+        df['Open time'] = pd.to_datetime(df['Open time'])
+        df = df.sort_values('Open time').reset_index(drop=True)
         
-        # Fit scaler on scale_cols
-        X_train_scale_part = self.scaler.fit_transform(X_train_raw[scale_cols].values)
-        X_val_scale_part = self.scaler.transform(X_val_raw[scale_cols].values)
-        X_test_scale_part = self.scaler.transform(X_test_raw[scale_cols].values)
+        # 1. Integrity Check: Gap Detection
+        # Calculate time diffs between rows
+        time_diffs = df['Open time'].diff()
+        # Standard interval is 15min. We flag anything > 16min as a gap.
+        # This boolean mask marks the START of a new continuous block
+        gap_mask = time_diffs > pd.Timedelta(minutes=16) 
         
-        # Get passthrough parts
-        X_train_pass = X_train_raw[passthrough_cols].values
-        X_val_pass = X_val_raw[passthrough_cols].values
-        X_test_pass = X_test_raw[passthrough_cols].values
+        # Create 'Block ID' group by cumulative sum of gaps
+        df['block_id'] = gap_mask.cumsum()
+        n_blocks = df['block_id'].nunique()
+        print(f"Gap Analysis: Found {n_blocks - 1} time gaps. Created {n_blocks} continuous blocks.")
+
+        # 2. Extract Features and Target
+        # Data is ALREADY SCALED in NewdataFinal.csv (RobustScaler applied previously).
+        # We do NOT apply further scaling here to preserve distribution logic.
         
-        # Concatenate back: Scaled + Passthrough
-        X_train_final = np.hstack([X_train_scale_part, X_train_pass])
-        X_val_final = np.hstack([X_val_scale_part, X_val_pass])
-        X_test_final = np.hstack([X_test_scale_part, X_test_pass])
+        # Prepare lists to hold sequences from ALL blocks
+        X_all_seqs = []
+        y_all_seqs = []
         
-        # Scale Target
-        # Since labels are now clean [0, 1], we do NOT need to scale or clip them.
-        # This allows direct interpretation of predictions as Q-scores.
-        y_train_scaled = y_train_raw.flatten()
-        y_val_scaled = y_val_raw.flatten()
-        y_test_scaled = y_test_raw.flatten()
-
-        print("Target values are clean (0-1). No sealing/clipping applied.")
-
-        X_train_seq, y_train_seq = self._create_sequences(X_train_final, y_train_scaled)
-        X_val_seq, y_val_seq = self._create_sequences(X_val_final, y_val_scaled)
-        X_test_seq, y_test_seq = self._create_sequences(X_test_final, y_test_scaled)
-
-        print(f"Train seq: {X_train_seq.shape}, Val seq: {X_val_seq.shape}, Test seq: {X_test_seq.shape}")
-
-        # 6. Create DataLoaders
-        train_loader = DataLoader(TensorDataset(torch.FloatTensor(X_train_seq), torch.FloatTensor(y_train_seq)), 
-                                  batch_size=self.batch_size, shuffle=True)
-        val_loader = DataLoader(TensorDataset(torch.FloatTensor(X_val_seq), torch.FloatTensor(y_val_seq)), 
-                                batch_size=self.batch_size, shuffle=False)
-        test_loader = DataLoader(TensorDataset(torch.FloatTensor(X_test_seq), torch.FloatTensor(y_test_seq)), 
-                                 batch_size=self.batch_size, shuffle=False)
+        print(f"Generating sequences (lookback={self.lookback})...")
         
-        input_size = X_train_seq.shape[2]
+        # Iterate over each continuous block to generate valid sequences without jumping gaps
+        for block_id, block_data in df.groupby('block_id'):
+            if len(block_data) <= self.lookback:
+                continue # Skip blocks shorter than lookback window
+                
+            X_block = block_data[self.feature_cols].values
+            y_block = block_data[self.target_col].values
+            
+            # Create sequences for this block
+            Xs, ys = self._create_sequences(X_block, y_block)
+            
+            if len(Xs) > 0:
+                X_all_seqs.append(Xs)
+                y_all_seqs.append(ys)
+        
+        if not X_all_seqs:
+            raise ValueError("No valid sequences generated! Check lookback vs data length.")
+            
+        # Concatenate all sequences from all blocks
+        X_final = np.concatenate(X_all_seqs, axis=0)
+        y_final = np.concatenate(y_all_seqs, axis=0).reshape(-1, 1)
+        
+        print(f"Total Sequences Generated: {len(X_final)}")
+        print(f"Input Shape: {X_final.shape}") # (N, 96, 21)
+        
+        # 3. Time Series Split (80/10/10) - Resecting Time Order
+        # Since X_final is ordered by time (blocks were processed in order), simple slicing works.
+        n_samples = len(X_final)
+        train_idx = int(n_samples * 0.8)
+        val_idx = int(n_samples * 0.9)
+        
+        X_train = X_final[:train_idx]
+        y_train = y_final[:train_idx]
+        
+        X_val = X_final[train_idx:val_idx]
+        y_val = y_final[train_idx:val_idx]
+        
+        X_test = X_final[val_idx:]
+        y_test = y_final[val_idx:]
+        
+        print(f"Train: {X_train.shape}, Val: {X_val.shape}, Test: {X_test.shape}")
+
+        # 4. Create DataLoaders
+        # Convert to PyTorch Tensors
+        train_dataset = TensorDataset(torch.FloatTensor(X_train), torch.FloatTensor(y_train))
+        val_dataset = TensorDataset(torch.FloatTensor(X_val), torch.FloatTensor(y_val))
+        test_dataset = TensorDataset(torch.FloatTensor(X_test), torch.FloatTensor(y_test))
+        
+        train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True) # Shuffle Train samples
+        val_loader = DataLoader(val_dataset, batch_size=self.batch_size, shuffle=False)
+        test_loader = DataLoader(test_dataset, batch_size=self.batch_size, shuffle=False)
+        
+        input_size = X_train.shape[2] # Should be 21
         return train_loader, val_loader, test_loader, input_size
 
     def _create_sequences(self, X, y):
+        # Optimized sequence generation using sliding window view (if possible) or list comp
         Xs, ys = [], []
+        # Need lookback steps + 1 target step
         for i in range(len(X) - self.lookback):
             Xs.append(X[i:(i + self.lookback)])
-            ys.append(y[i + self.lookback])
+            ys.append(y[i + self.lookback]) # Target is the NEXT candle after sequence ? Or current?
+            # Standard: predict T based on T-Lookback...T-1. 
+            # If y aligns with X, y[i+lookback] is the target for window i..i+lookback
         return np.array(Xs), np.array(ys)
 
 def main():
-    PARQUET_FILE = os.path.join("Ai_Trading", "app", "MLearning", "MVP ML", "data", "data_final_with_vmd_features.parquet")
+    # New Dataset Path
+    CSV_FILE = os.path.join("Ai_Trading", "data", "NewdataFinal.csv")
     
-    if not os.path.exists(PARQUET_FILE):
+    if not os.path.exists(CSV_FILE):
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        PARQUET_FILE = os.path.abspath(os.path.join(script_dir, "..", "MVP ML", "data", "data_final_with_vmd_features.parquet"))
+        # Try to resolve relative to script
+        CSV_FILE = os.path.abspath(os.path.join(script_dir, "../../../data/NewdataFinal.csv"))
     
-    if not os.path.exists(PARQUET_FILE):
-        print(f"Parquet file not found at {PARQUET_FILE}")
-        print(f"Current Working Directory: {os.getcwd()}")
+    if not os.path.exists(CSV_FILE):
+        print(f"CRITICAL: Dataset not found at {CSV_FILE}")
         return
 
-    pipeline = AdvancedDataPipeline(parquet_path=PARQUET_FILE, lookback=96, batch_size=32)
+    # Use NewDataPipeline with 21 features
+    pipeline = NewDataPipeline(csv_path=CSV_FILE, lookback=96, batch_size=32)
     
     try:
         train_loader, val_loader, test_loader, input_size = pipeline.load_and_prep()
+    except Exception as e:
+        print(f"Pipeline failed: {e}")
+        return
     except Exception as e:
         print(f"Pipeline failed: {e}")
         return

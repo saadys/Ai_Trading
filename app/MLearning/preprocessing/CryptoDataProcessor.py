@@ -64,29 +64,25 @@ class CryptoDataProcessor:
         return data
 
     def calculate_technical_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Calculates exact technical indicators as defined in IndicatorValidator/IndicatorService.
-        """
         print("Calculating technical indicators (Production Parity)...")
         data = df.copy()
         
-        # Ensure inputs are float and numpy arrays for talib
         closes = data['Close'].values.astype(float)
         highs = data['High'].values.astype(float)
         lows = data['Low'].values.astype(float)
         
-        # --- Trend Indicators (EMA) ---
+        #  (EMA) 
         data['ema_20'] = talib.EMA(closes, timeperiod=20)
         data['ema_50'] = talib.EMA(closes, timeperiod=50)
         data['ema_200'] = talib.EMA(closes, timeperiod=200)
         
-        # --- Momentum Indicators (RSI) ---
+        #  (RSI) 
         data['rsi_14'] = talib.RSI(closes, timeperiod=14)
         
-        # --- Volatility Indicators (ATR) ---
+        #  (ATR) 
         data['atr_14'] = talib.ATR(highs, lows, closes, timeperiod=14)
         
-        # --- MACD ---
+        # MACD 
         macd, macd_signal, macd_hist = talib.MACD(
             closes, 
             fastperiod=12, 
@@ -100,9 +96,6 @@ class CryptoDataProcessor:
         return data
 
     def create_positional_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Transforms raw indicators into 'Positional Context' features to solve Model Collapse.
-        """
         print("Creating Positional Context features...")
         data = df.copy()
         
@@ -114,13 +107,13 @@ class CryptoDataProcessor:
         # Handle potential NaNs in EMA200 by filling or just letting dropna handle it later
         data['dist_ema_200'] = np.log((data['Close'] + epsilon) / (data['ema_200'] + epsilon))
         
-        # 2. Normalized RSI
+        # Normalized RSI
         data['rsi_norm'] = data['rsi_14'] / 100.0
         
-        # 3. Normalized ATR (Volatility Ratio)
+        # Normalized ATR (Volatility Ratio)
         data['atr_ratio'] = data['atr_14'] / data['Close']
         
-        # 4. Normalized MACD
+        # Normalized MACD
         data['macd_norm'] = data['macd_line'] / data['Close']
         data['macd_sig_norm'] = data['macd_signal'] / data['Close']
         data['macd_hist_norm'] = data['macd_hist'] / data['Close']
@@ -205,10 +198,9 @@ class CryptoDataProcessor:
         print("Scaling features...")
         data = df.copy()
         
-        # Define the Final Feature Set for the Model
         # We focus on the NEW positional features + Seasonal
         features = [
-            # Base Features (Stationarized)
+            # Base Features
             'Open_diff', 'High_diff', 'Low_diff', 'Close_diff','Volume'
 
             # Positional / Context Features
@@ -217,38 +209,32 @@ class CryptoDataProcessor:
             'atr_ratio',
             'macd_norm', 'macd_sig_norm', 'macd_hist_norm',
             
-            # Seasonal Features (Cyclical encoding)
+            # Seasonal Features 
             'hour_sin', 'hour_cos', 
             'day_of_week_sin', 'day_of_week_cos', 
             'month_sin', 'month_cos',
             
-            # Volume Log (still useful)
+            # Volume Log
              'Volume_log'
         ]
         
         if 'Volume' in data.columns:
              data['Volume_log'] = np.log1p(data['Volume'])
         
-        # Check what's available
-        # Separate numeric features for scaling
         numeric_features = [f for f in features if f in data.columns]
         
-        # Add metadata features explicitly requested by user
         meta_features = ['Open time', 'Close time']
         available_meta = [f for f in meta_features if f in data.columns]
         
         print(f"Selected numeric features for scaling: {numeric_features}")
         print(f"Selected metadata features: {available_meta}")
         
-        # Use RobustScaler to handle outliers in the distributions
         if numeric_features:
             data[numeric_features] = self.scaler.fit_transform(data[numeric_features])
         
         print(f"Saving scaler to {self.scaler_path}...")
         joblib.dump(self.scaler, self.scaler_path)
         
-        # Combine features: Numeric first, then Meta (or order as preferred)
-        # User wants them in the CSV.
         final_columns = numeric_features + available_meta
         X_scaled = data[final_columns].values
         
@@ -284,7 +270,6 @@ class CryptoDataProcessor:
         X_test = X[val_idx:]
         y_test = y[val_idx:]
         
-        # Balancing Logic
         bins = [-np.inf, 0.33, 0.66, np.inf]
         y_train_series = pd.Series(y_train_raw)
         
@@ -304,7 +289,6 @@ class CryptoDataProcessor:
         for cls in [0, 1, 2]:
             cls_indices = np.where(train_classes == cls)[0]
             if len(cls_indices) > 0:
-                 # Ensure we don't sample more than available if min is somehow larger (unlikely with min logic)
                  count = min(len(cls_indices), min_class_count)
                  selected = np.random.choice(cls_indices, count, replace=False)
                  balanced_indices.append(selected)
@@ -328,26 +312,25 @@ class CryptoDataProcessor:
     def run_pipeline(self, input_path: str, output_dir: str):
         df = self.load_data(input_path)
         
-        # 1. Feature Engineering
+        #Feature Engineering
         df = self.add_Seasonal_features(df)
         df = self.calculate_technical_indicators(df)
         df = self.create_positional_features(df)
         
-        # 2. Labeling
+        # Labeling
         df = self.labeler.calculate_q_labels(df)
         
-        # 3. Cleaning
-        # Drop NaN from both diffs (first row) and Indicators (first 200 rows for EMA200)
+        # Cleaning
         df_clean = df.dropna().reset_index(drop=True)
         print(f"Data shape after cleaning: {df_clean.shape}")
         
-        # 4. Scaling
+        # Scaling
         X_scaled, y_labels, cols = self.scale_features(df_clean)
         
-        # 5. Sequencing
+        # Sequencing
         X_seq, y_seq = self.create_sequences(X_scaled, y_labels)
         
-        # 6. Splitting
+        # Splitting
         splits = self.split_and_balance(X_seq, y_seq)
         
         os.makedirs(output_dir, exist_ok=True)
@@ -356,7 +339,6 @@ class CryptoDataProcessor:
             np.save(os.path.join(output_dir, f"{name}.npy"), arr)
             print(f"Saved {name}: {arr.shape}")
         
-        # Save feature list for inference reference
         joblib.dump(cols, os.path.join(output_dir, "feature_names.pkl"))
             
         print("Pipeline completed successfully.")
