@@ -1,6 +1,6 @@
 
 from SentimentInterface import SentimentInterface
-from app.core.Config import get_settings
+from app.core.config import get_settings
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import numpy as np
 import torch

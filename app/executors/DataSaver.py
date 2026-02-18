@@ -16,6 +16,8 @@ class DataSaver:
         self.queue = queuemanager
         self.table_model = TableModel(database_manager) 
         self.ohlcv_batch = []
+        self.indicator_batch = []
+        self.data_news_batch = []
         self.batch_size = batch_size
 
     async def start(self):

@@ -65,7 +65,7 @@ class MarketDataCollector:
             await self.queue.publish(
                 exchange_name='market_data_exchange',
                 message=envolloppe, 
-                routing_key='market_data.*'
+                routing_key='market_data.ohlcv.btc'
             )
 
         except ValidationError as e:

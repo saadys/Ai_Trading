@@ -324,6 +324,12 @@ class CryptoDataProcessor:
         df_clean = df.dropna().reset_index(drop=True)
         print(f"Data shape after cleaning: {df_clean.shape}")
         
+        # EXPORT FOR TRAINER (Crucial Step)
+        # We save the enriched data here so trainer.py can load it with all features
+        enriched_path = os.path.join(output_dir, "enriched_data.parquet")
+        print(f"Saving enriched data to {enriched_path}...")
+        df_clean.to_parquet(enriched_path)
+        
         # Scaling
         X_scaled, y_labels, cols = self.scale_features(df_clean)
         

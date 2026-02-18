@@ -1,18 +1,17 @@
 from aio_pika.abc import AbstractConnection, AbstractChannel, AbstractExchange, AbstractQueue
 from aio_pika import connect_robust, ExchangeType, Message
-from app.core.Config import Settings, get_settings
+from app.core.config import Settings, get_settings
 from typing import Callable, Optional, Dict, Any
-from typing import Optional
 import aio_pika
 import asyncio
 import json
 import logging
+import time
 
 logger = logging.getLogger(__name__)
-
 class QueueManager:
-    def __init__(self,settings = None):
-        self.settings = settings or Settings.get_settings()
+    def __init__(self, settings: Optional[Settings] = None):
+        self.settings = settings or get_settings()
 
         self.connection : Optional[AbstractConnection] = None
         self.channel : Optional[AbstractChannel] = None
@@ -28,15 +27,21 @@ class QueueManager:
         logger.info("QueueManager initialized with configuration")
     
     async def connect(self):
-
         if self.connection and not self.connection.is_closed:
             logger.info("Already connected to RabbitMQ")
-            return
-        
+            return        
         try:
-            rabbitmq_url = f"amqp://{self.rabbitmq_user}:{self.rabbitmq_password}@{self.rabbitmq_host}:{self.rabbitmq_port}/"
-            self.connection = await connect_robust(rabbitmq_url) # reconnection automatique
-            self.channel = await self.connection.channel()
+            vhost = self.settings.RABBITMQ_DEFAULT_VHOST
+            if vhost == "localhost" or not vhost or vhost == "/":
+                vhost_path = ""
+            else:
+                vhost_path = vhost.lstrip('/')
+                
+            rabbitmq_url = f"amqp://{self.rabbitmq_user}:{self.rabbitmq_password}@{self.rabbitmq_host}:{self.rabbitmq_port}/{vhost_path}"
+            
+            self.connection = await connect_robust(rabbitmq_url)
+            self.channel = await self.connection.channel(publisher_confirms=True)
+            print(f"DEBUG: Connected to RabbitMQ at {self.rabbitmq_host}:{self.rabbitmq_port} [VHost: {vhost}]")
             
             await self.channel.set_qos(prefetch_count=10)
             
@@ -85,6 +90,7 @@ class QueueManager:
 
             )
             self.exchanges[exchange_name] = exchange
+            print(f"DEBUG: Exchange '{exchange_name}' declared")
             logger.info(f" Exchange '{exchange_name}' ({exchange_type.value}) declared")
 
     async def _declare_queues(self):
@@ -108,35 +114,45 @@ class QueueManager:
                     'x-dead-letter-routing-key': 'dead_message'
                 })
 
+            print(f"DEBUG: Declaring queue '{queue_name}'...")
             queue = await self.channel.declare_queue(
                 queue_name,
                 durable=True,  
                 arguments=arguments  
             )
             self.queues[queue_name] = queue
+            print(f"DEBUG: Queue '{queue_name}' declared successfully")
             logger.info(f" Queue '{queue_name}' declared")
 
     async def _create_bindings(self):
         bindings = [
-            ('market_data_exchange', 'indicator_queue', 'market_data.*'),
-            ('market_data_exchange', 'database_saver_queue', 'market_data.*'),
-            ('market_data_exchange', 'context_aggregator_queue', 'market_data.*'),
-            ('market_data_exchange', 'sentiment_queue', 'market_data.*'),
-
+            # SENTIMENT QUEUE : Reçoit les news via pattern flexible
+            ('market_data_exchange', 'sentiment_queue', 'market_data.news.#'),
             
+            # INDICATOR QUEUE : Reçoit OHLCV via pattern flexible
+            ('market_data_exchange', 'indicator_queue', 'market_data.ohlcv.#'),
+            
+            # DATABASE SAVER QUEUE : Reçoit TOUT pour sauvegarde complète
+            ('market_data_exchange', 'database_saver_queue', 'market_data.#'),
+            
+            # CONTEXT AGGREGATOR QUEUE : Reçoit TOUT pour agrégation
+            ('market_data_exchange', 'context_aggregator_queue', 'market_data.#'),
+            
+            # ALERT QUEUE
             ('indicator_exchange', 'alert_queue', ''),
-            
             ('alert_exchange', 'alert_queue', 'high_priority'),
 
-            # Binding pour la Dead Letter Queue
+            # DEAD LETTER QUEUE
             ('dlx_exchange', 'dead_letter_queue', 'dead_message')
         ]
         
         for exchange_name, queue_name, routing_key in bindings:
+            print(f"DEBUG: Binding '{queue_name}' to '{exchange_name}' with key '{routing_key}'...")
             await self.queues[queue_name].bind(
                 self.exchanges[exchange_name],
                 routing_key
             )
+            print(f"DEBUG: Bound '{queue_name}' successfully")
             logger.info(f" Bound '{queue_name}' to '{exchange_name}' with key '{routing_key}'")
 
     async def publish(self, exchange_name: str, message: Dict[str, Any], routing_key: str = ""):
@@ -153,16 +169,20 @@ class QueueManager:
             rabbitmq_message = Message(
                 message_bytes,
                 delivery_mode=2,  # si RabbitMQ crash les donnees vont etre stocker dans le disque
-                timestamp=asyncio.get_event_loop().time()
+                timestamp=time.time() #Temps réel 
             )
             
-            exchange = self.exchanges.get(exchange_name)
-            if not exchange:
-                raise ValueError(f"Exchange '{exchange_name}' not found. Call setup_broker() first.")
+            if exchange_name == "":
+                exchange = self.channel.default_exchange
+            else:
+                exchange = self.exchanges.get(exchange_name)
+                if not exchange:
+                    raise ValueError(f"Exchange '{exchange_name}' not found. Call setup_broker() first.")
         
-            await exchange.publish(rabbitmq_message, routing_key=routing_key)
+            confirms = await exchange.publish(rabbitmq_message, routing_key=routing_key, mandatory=True)
             
-            logger.debug(f" Message published to '{exchange_name}' with key '{routing_key}'")
+            print(f"DEBUG: Message published to {exchange_name} with key {routing_key}. Confirmed: {confirms}")
+            logger.info(f" Message published to '{exchange_name}' (Key: {routing_key})")
             
         except Exception as e:
             logger.error(f" Failed to publish message: {e}")

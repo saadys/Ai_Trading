@@ -118,7 +118,7 @@ class IndicatorService:
                     await self.queue.publish(
                         exchange_name='market_data_exchange', 
                         message=envolloppe, 
-                        routing_key='market_data.indicator' 
+                        routing_key='market_data.indicators.btc' 
                     )                    
                 except ValidationError as e:
                     logger.error(f"Error validating indicators: {e}")
