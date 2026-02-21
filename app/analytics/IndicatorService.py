@@ -66,36 +66,36 @@ class IndicatorService:
                 np_highs = np.array(self.highs_buffer)
                 np_lows = np.array(self.lows_buffer)
                 
-                # --- EMA 20 ---
+                #  EMA 20 
                 ema_20 = talib.EMA(np_closes, timeperiod=20)[-1]
                 indicators_data["ema_20"] = float(ema_20)
                 logger.info(f"[{self.symbol}] EMA 20: {ema_20:.2f}")
 
-                # --- EMA 50 ---
+                #  EMA 50 
                 if len(self.prices_buffer) >= 50:
                     ema_50 = talib.EMA(np_closes, timeperiod=50)[-1]
                     indicators_data["ema_50"] = float(ema_50)
                     logger.info(f"[{self.symbol}] EMA 50: {ema_50:.2f}")
 
-                # --- EMA 200 ---
+                #  EMA 200 
                 if len(self.prices_buffer) >= 200:
                     ema_200 = talib.EMA(np_closes, timeperiod=200)[-1]
                     indicators_data["ema_200"] = float(ema_200)
                     logger.info(f"[{self.symbol}] EMA 200: {ema_200:.2f}")
 
-                # --- RSI 14 ---
+                #  RSI 14 
                 if len(self.prices_buffer) >= 14:
                     rsi = talib.RSI(np_closes, timeperiod=14)[-1]
                     indicators_data["rsi_14"] = float(rsi)
                     logger.info(f"[{self.symbol}] RSI 14: {rsi:.2f}")
 
-                # --- ATR 14 (Volatilité) ---
+                #  ATR 14 (Volatilité) 
                 if len(self.prices_buffer) >= 14:
                     atr = talib.ATR(np_highs, np_lows, np_closes, timeperiod=14)[-1]
                     indicators_data["atr_14"] = float(atr)
                     logger.info(f"[{self.symbol}] ATR 14: {atr:.2f}")
 
-                # --- MACD ---
+                #  MACD 
                 if len(self.prices_buffer) >= 26:
                     macd, macd_signal, macd_hist = talib.MACD(
                         np_closes, 

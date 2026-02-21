@@ -7,6 +7,12 @@ from processors.SentimentProcessor.SentimentStrategypattern import SentimentStra
 from processors.SentimentProcessor.SentimentProcessor import SentimentProcessor
 from processors.SentimentProcessor.SentimentProviderFactory import SentimentStrategyFactory
 from processors.SentimentProcessor.SentimentEnum import SentimentStrategy
+from app.aggregators.ContextAggregator import ContextAggregator
+from app.core.Logger import Logger
+from apscheduler.schedulers.background import BackgroundScheduler
+import asyncio
+from app.aggregators.ContextAggregator import ContextAggregator
+from app.core.Logger import Logger  
 app = FastAPI() 
 settings = get_settings()
 
@@ -58,8 +64,38 @@ async def startup_event(app: FastAPI):
         asyncio.create_task(app.sentiment_processor.start())
         Logger.info("SentimentProcessor démarré.")
 
+        # ContextAggregator (accumule toutes les données: OHLCV, indicateurs, sentiment, ML)
+        app.context_aggregator = ContextAggregator(app.queue_manager)
+        asyncio.create_task(app.context_aggregator.start())
+        Logger.info("ContextAggregator démarré et en écoute de la queue.")
 
+        # Scheduler APScheduler pour déclencher aggregate() tous les 15min
+        app.scheduler = BackgroundScheduler()
+        app.scheduler.add_job(
+            func=app.context_aggregator.aggregate,
+            trigger='interval',
+            minutes=15,
+            id='aggregate_15min',
+            name='Agrégation contexte toutes les 15 minutes'
+        )
+        app.scheduler.start()
+        Logger.info("Scheduler APScheduler démarré - aggregate() chaque 15 minutes.")
 
+        # ContextAggregator
+        app.context_aggregator = ContextAggregator(app.queue_manager)
+        asyncio.create_task(app.context_aggregator.start())
+        Logger.info("ContextAggregator démarré et en écoute.")
+
+        # Scheduler pour déclencher aggregate() tous les 15min
+        app.scheduler = Scheduler()
+        app.scheduler.add_job(
+            func=app.context_aggregator.aggregate,
+            trigger='interval',
+            minutes=15,
+            id='aggregate_15min'
+        )
+        app.scheduler.start()
+        Logger.info("Scheduler démarré - aggregate() tous les 15min.")
     except Exception as e:
         Logger.error(f"Erreur critique lors du démarrage : {str(e)}")
         raise e
@@ -68,6 +104,11 @@ async def startup_event(app: FastAPI):
 @app.on_event("shutdown")
 async def shutdown_event():
     Logger.info("Arrêt de l'application...")
+    
+    # Arrêter le scheduler
+    if hasattr(app, 'scheduler') and app.scheduler.running:
+        app.scheduler.shutdown()
+        Logger.info("Scheduler arrêté.")
     
     await app.queue_manager.disconnect()
     await app.database_client.dispose()
