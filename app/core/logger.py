@@ -33,9 +33,7 @@ class Logger():
     @staticmethod
     def _get_logger():
         if not _logger_instance :
-            raise Exception("Logger instance is not initialized")
-        # Debug print to diagnose recursion
-        # print(f"DEBUG: _get_logger returning type: {type(_logger_instance)}")
+            LoggerConfig(db_session=None)
         return _logger_instance
 
     @staticmethod
@@ -58,7 +56,4 @@ class Logger():
     def critical(message):
         Logger._get_logger().critical(message)
     
-def logger():
-    return Logger
-
-
+logger = Logger

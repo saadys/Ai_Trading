@@ -17,11 +17,11 @@ class ContextAggregator:
         self.queue = queuemanager
         # État en mémoire pour accumuler les données
         self.state = {
-            "OHLCV": None,
-            "sentiment": [],
-            "indicators": None,
-            "ml_prediction": None,
-            "account": None
+            "OHLCV": {},
+            "sentiment": {},
+            "indicators": {},
+            "ml_prediction": {},
+            "account": {}
         }
         
 

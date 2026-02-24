@@ -28,9 +28,8 @@ vmdpy==0.2
 mlflow==3.8.1
 psycopg2-binary==2.9.11
 
-
-
-
+google-genai==1.64.0
+openai==2.22.0
 
 
 

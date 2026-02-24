@@ -27,9 +27,11 @@ class Settings(BaseSettings):
 ############################## Config LLMS ##############################
 
     DEEPSEEK_API_KEY : str = ""
+    DEEPSEEK_BASE_URL : str = ""
     OPENAI_API_KEY : str = ""
     QWEN_kEY : str = ""
     BINANCE_API_KEY : str = ""
+    GEMINI_API_KEY : str = "AIzaSyCrSlHwNcMZIIETsJfFjI-IIuT0x2BxfdE"
 
     Model_Sentiment_Name : str = "yiyanghkust/finbert-tone"
 
