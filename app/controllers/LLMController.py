@@ -61,7 +61,7 @@ class LLMController:
             logger.error(f"[LLMController] Erreur dans Get_Current_Context : {e}")
             raise HTTPException(status_code=500, detail=str(e))
             
-    #Change dynamiquement le provider LLM actif (ex: 'GEMINI' -> 'DEEPSEEK') sans avoir besoin de redémarrer l'application.
+    #Change dynamiquement le provider LLM actif ( GEMINI -> DEEPSEEK) .
     def Change_Provider(self, provider_name: str):
         try:
             # Recherche de l'Enum correspondant ignorée la casse (Deepseek, deepseek, DEEPSEEK...)

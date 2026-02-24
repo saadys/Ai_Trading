@@ -5,4 +5,3 @@ class StreamTypeEnum(Enum):
     KLINE = "kline" # Ce flux fournit des informations de chandelier/candlestick (kline) pour un intervalle de temps donné (par exemple, 1min, 15min...). 
     TICKER = "ticker"
     BOOK_TICKER = "bookTicker"
-    # ...autres types selon la doc
