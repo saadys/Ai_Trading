@@ -1,5 +1,5 @@
 from fastapi import FastAPI,Depends, APIRouter
-from core.Config import Settings, get_settings
+from app.core.config import Settings, get_settings
 
 
 app = FastAPI()
@@ -10,7 +10,7 @@ base_router = APIRouter(
 
 
 @base_router.get("/")
-async def root(app_settings : Settings=Depends(get_settings())):
+async def root(app_settings : Settings=Depends(get_settings)):
     Application_Name = app_settings.NAME_APP
     App_Version = app_settings.APP_VERSION
     return {

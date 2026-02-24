@@ -8,7 +8,7 @@ from app.services.streaming.QueueManager import QueueManager
 from app.services.streaming.BinanceStream import BinanceStream
 from app.services.streaming.DataValidator import DataValidator
 from app.models.MarketData import MarketData
-from app.core.Logger import Logger, logger
+from app.core.logger import Logger, logger
 from json import JSONDecodeError
 from pydantic import ValidationError
 from datetime import datetime

@@ -7,7 +7,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 # Core
 from app.core.config import Settings, get_settings
-from app.core.Logger import Logger, logger
+from app.core.logger import Logger, logger
 
 # Pipeline
 from app.services.streaming.QueueManager import QueueManager
@@ -23,18 +23,23 @@ from app.models.enums.SymbolEnum import SymbolEnum
 from app.models.enums.KlineIntervalEnum import KlineIntervalEnum
 
 # Sentiment
-from processors.SentimentProcessor.SentimentStrategypattern import SentimentStrategyFinbert
-from processors.SentimentProcessor.SentimentProcessor import SentimentProcessor
-from processors.SentimentProcessor.SentimentProviderFactory import SentimentStrategyFactory
-from processors.SentimentProcessor.SentimentEnum import SentimentStrategy
+from app.processors.SentimentProcessor.SentimentStrategypattern import SentimentStrategyFinbert
+from app.processors.SentimentProcessor.SentimentProcessor import SentimentProcessor
+from app.processors.SentimentProcessor.SentimentProviderFactory import SentimentStrategyFactory
+from app.processors.SentimentProcessor.SentimentEnum import SentimentStrategy
 
 # LLM
 from app.stores.LLM.PromptBuilder import PromptBuilder
 from app.stores.LLM.LLMEnum import LLMEnum
 from app.stores.LLM.LLMProviderFactory import LLMProviderFactory
-
+from app.routers.streaming_routers import streaming_router
+from app.routers.LLMRouters import llm_router
+from app.routers.base import base_router
+from app.models.db_schemas.mini_Trading.schemas import SQLAlchemyBase
 
 app = FastAPI()
+app.include_router(streaming_router)
+app.include_router(llm_router)
 settings = get_settings()
 
 
@@ -73,6 +78,11 @@ async def startup_event():
         app.async_engine = create_async_engine(
             postgres_url
         )
+        
+        async with app.async_engine.begin() as conn:
+            await conn.run_sync(SQLAlchemyBase.metadata.create_all)
+        Logger.info("Tables de la base de données analysées/créées avec succès.")
+
         app.database_client = sessionmaker(
             bind=app.async_engine,
             class_=AsyncSession,
@@ -95,9 +105,9 @@ async def startup_event():
         socket_url = f"wss://stream.binance.com:9443/ws/{symbol_value}@kline_{interval_value}"
         binance_stream = BinanceStream(socket_url)
         data_collector = MarketDataCollector(binance_stream, app.queue_manager, "Binance")
-        app.stream_processor = StreamProcessor(symbol_value.upper(), binance_stream, data_collector)
+        app.stream_processor = StreamProcessor(symbol_value, binance_stream, data_collector)
         await app.stream_processor.initialisation()
-        Logger.info(f"StreamProcessor initialisé pour {symbol_value.upper()}.")
+        Logger.info(f"StreamProcessor initialisé pour {symbol_value}.")
         asyncio.create_task(app.stream_processor.start())
 
         app.indicator_service = IndicatorService(app.queue_manager, SymbolEnum.BTCUSDT)

@@ -1,5 +1,5 @@
 from app.models.enums.SymbolEnum import SymbolEnum
-from app.core.Logger import Logger
+from app.core.logger import Logger, logger
 import asyncio
 import sys
 import os

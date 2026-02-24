@@ -6,8 +6,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../../..'))
 
 from app.services.streaming.QueueManager import QueueManager
 from app.models.TableModel import TableModel
-from .SentimentInterface import SentimentInterface
-from app.core.Logger import Logger, logger
+from app.processors.SentimentProcessor.SentimentInterface import SentimentInterface
+from app.core.logger import Logger, logger
 
 
 logger = Logger()

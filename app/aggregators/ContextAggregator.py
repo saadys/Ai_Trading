@@ -7,7 +7,7 @@ from app.services.streaming.QueueManager import QueueManager
 from app.services.streaming.DataValidator import DataValidator
 from app.services.streaming.IndicatorValidator import IndicatorValidator
 from app.models.pydantic.SentimentValidator import SentimentValidator
-from app.core.Logger import Logger, logger
+from app.core.logger import Logger, logger
 from pydantic import ValidationError
 from datetime import datetime
 logger = Logger()

@@ -1,6 +1,6 @@
 
-from SentimentStrategypattern import SentimentStrategyFinbert, SentimentStrategyNLP, SentimentStrategyLLM
-from SentimentEnum import SentimentStrategy
+from app.processors.SentimentProcessor.SentimentStrategypattern import SentimentStrategyFinbert, SentimentStrategyNLP, SentimentStrategyLLM
+from app.processors.SentimentProcessor.SentimentEnum import SentimentStrategy
 
 class SentimentStrategyFactory:
     @staticmethod

@@ -31,6 +31,8 @@ psycopg2-binary==2.9.11
 google-genai==1.64.0
 openai==2.22.0
 
+APScheduler==3.11.2
+
 
 
 

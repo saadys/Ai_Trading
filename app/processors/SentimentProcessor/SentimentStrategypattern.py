@@ -1,5 +1,5 @@
 
-from SentimentInterface import SentimentInterface
+from app.processors.SentimentProcessor.SentimentInterface import SentimentInterface
 from app.core.config import get_settings
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import numpy as np

@@ -6,7 +6,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../../..'))
 from app.models.db_schemas.mini_Trading.schemas.MarketData import MarketData
 from app.services.streaming.QueueManager import QueueManager
 from app.models.TableModel import TableModel
-from app.core.Logger import Logger, logger
+from app.core.logger import Logger, logger
 
 logger = Logger()
 

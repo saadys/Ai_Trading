@@ -1,4 +1,4 @@
-from app.core.Logger import Logger, logger
+from app.core.logger import Logger, logger
 from app.services.streaming.QueueManager import QueueManager
 from app.models.enums.SymbolEnum import SymbolEnum
 from app.services.streaming.IndicatorValidator import IndicatorValidator
