@@ -39,7 +39,6 @@ class LSTM_Production_Model(nn.Module):
         x = self.relu(x)                       
         x = self.dropout_fc(x)  
         
-        # Output final 64 → 1
-        prediction = self.fc2(x)
+        prediction = torch.sigmoid(self.fc2(x))
         
         return prediction

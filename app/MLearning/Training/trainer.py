@@ -78,7 +78,8 @@ class Trainer:
         self.device = device if device else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model = model.to(self.device)
         
-        self.criterion = nn.HuberLoss(delta=0.3)
+        # Use BCE Loss since Q-Labels represent values in [0, 1] essentially framing it as probability
+        self.criterion = nn.BCELoss()
         
         self.optimizer = optim.AdamW(
             self.model.parameters(),
@@ -349,15 +350,13 @@ class AdvancedDataPipeline:
         X_val_final = np.hstack([X_val_scale_part, X_val_pass])
         X_test_final = np.hstack([X_test_scale_part, X_test_pass])
         
-        # Scale Target (CRITICAL FIX for Close_diff target)
-        # Target is NOT [0,1] anymore, it's Close_diff with outliers
-        print("Scaling target (Close_diff future) with RobustScaler...")
-        target_scaler = RobustScaler()
-        y_train_scaled = target_scaler.fit_transform(y_train_raw).flatten()
-        y_val_scaled = target_scaler.transform(y_val_raw).flatten()
-        y_test_scaled = target_scaler.transform(y_test_raw).flatten()
+        # Target is Q-Label [0,1], no scaling needed
+        print("Target is Q-Labels [0,1]. No target scaling applied.")
+        y_train_scaled = y_train_raw.flatten()
+        y_val_scaled = y_val_raw.flatten()
+        y_test_scaled = y_test_raw.flatten()
         
-        print(f"Target scaled: mean={y_train_scaled.mean():.4f}, std={y_train_scaled.std():.4f}")
+        print(f"Target distribution: mean={y_train_scaled.mean():.4f}, std={y_train_scaled.std():.4f}")
 
         X_train_seq, y_train_seq = self._create_sequences(X_train_final, y_train_scaled)
         X_val_seq, y_val_seq = self._create_sequences(X_val_final, y_val_scaled)
@@ -386,11 +385,11 @@ class AdvancedDataPipeline:
         return np.array(Xs), np.array(ys)
 
 def main():
-    CSV_FILE = os.path.join("Ai_Trading", "data", "NewdataFinal_simple_target.csv")
+    CSV_FILE = os.path.join("Ai_Trading", "data", "NewdataFinal_corrected.csv")
     
     if not os.path.exists(CSV_FILE):
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        CSV_FILE = os.path.abspath(os.path.join(script_dir, "..", "..", "..", "data", "NewdataFinal_simple_target.csv"))
+        CSV_FILE = os.path.abspath(os.path.join(script_dir, "..", "..", "..", "data", "NewdataFinal_corrected.csv"))
     
     if not os.path.exists(CSV_FILE):
         print(f"CRITICAL: Final Dataset not found at {CSV_FILE}")
@@ -398,7 +397,7 @@ def main():
         return
 
     print(f"Using Dataset: {CSV_FILE}")
-    print("NOTE: Using Close_diff(t+4) as target for validation")
+    print("NOTE: Using Q-Labels as target for training and validation")
     pipeline = AdvancedDataPipeline(csv_path=CSV_FILE, lookback=192, batch_size=128)
     
     try:
