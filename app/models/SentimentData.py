@@ -1,0 +1,15 @@
+
+class SentimentData(BaseDataModel):
+    def __init__(self, symbol, timestamp, sentiment_score, sentiment_label):
+        self.symbol = symbol
+        self.timestamp = timestamp
+        self.sentiment_score = sentiment_score
+        self.sentiment_label = sentiment_label  
+    
+    def to_dict(self) -> dict:
+        return {
+            "symbol": self.symbol,
+            "timestamp": self.timestamp,
+            "sentiment_score": self.sentiment_score,
+            "sentiment_label": self.sentiment_label,
+        }
