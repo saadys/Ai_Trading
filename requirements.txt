@@ -1,15 +1,43 @@
 pydantic-settings==2.11.0
-<<<<<<< HEAD
-fastapi== 0.121.0
-websocket-client==1.9.0
-=======
 fastapi==0.121.0
 websocket-client==1.9.0
 asyncio==3.4.3
 aio-pika==9.5.8
+
 SQLAlchemy==2.0.44
+alembic==1.18.1
+
 TA-Lib==0.6.8
 asyncpg==0.29.0
 uvicorn==0.27.1
 python-dotenv==1.0.1
->>>>>>> tut-002
+
+newsdataapi==0.1.29
+websockets==15.0.1
+
+transformers==4.57.3
+--extra-index-url https://download.pytorch.org/whl/cu129
+torch==2.8.0+cu129
+torchvision==0.23.0+cu129
+torchaudio==2.8.0+cu129
+
+scikit-learn==1.7.0
+
+vmdpy==0.2
+
+mlflow==3.8.1
+psycopg2-binary==2.9.11
+
+google-genai==1.64.0
+openai==2.22.0
+
+APScheduler==3.11.2
+
+
+
+
+
+#requests==2.32.5
+#bs4==4.14.3
+#feedparser==6.0.12
+#aiohttp==3.9.3

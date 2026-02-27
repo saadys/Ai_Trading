@@ -1,7 +1,8 @@
-from sqlalchemy import Column, Integer, String, DateTime, func as SQLAlchemyEnum
-from schemas import SQLAlchemyBase
+from sqlalchemy import Column, Integer, String, DateTime, Enum as SQLAlchemyEnum
+from sqlalchemy import func
+from .Base_Trading import SQLAlchemyBase
 from enum import Enum
-import datetime
+from datetime import datetime
 
 class LogLevel(Enum):
     DEBUG = "DEBUG"

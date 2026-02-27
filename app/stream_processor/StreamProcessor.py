@@ -1,5 +1,5 @@
 from app.models.enums.SymbolEnum import SymbolEnum
-from app.core.Logger import Logger
+from app.core.logger import Logger, logger
 import asyncio
 import sys
 import os
@@ -31,7 +31,6 @@ class StreamProcessor:
         except Exception as e:
             logger.error(f"Error during initialization QueueManager: {e}")
 
-        # On branche le callback vers notre buffer
         self.binancestream.on_message_callback = self._buffer_message
 
         logger.info("Initialization complete. System ready.")
@@ -56,7 +55,7 @@ class StreamProcessor:
                 
             except Exception as e:
                 logger.error(f"An error occurred in processing loop: {e}")
-                await asyncio.sleep(1) # Petite pause en cas d'erreur pour éviter le spam
+                await asyncio.sleep(1) 
 
     async def stop(self):
         try:
@@ -67,10 +66,8 @@ class StreamProcessor:
             self.binancestream.on_message_callback = None
             await self.binancestream.disconnect()
             
-            # 3. DRAINAGE : Attendre que le buffer soit vide
             if not self.internal_buffer.empty():
                 logger.info(f"Draining buffer... {self.internal_buffer.qsize()} messages remaining.")
-                # On attend que tous les items mis dans la queue soient marqués 'task_done'
                 await self.internal_buffer.join()
             
             logger.info(f"StreamProcessor for {self.symbol} stopped successfully.")
@@ -81,6 +78,9 @@ class StreamProcessor:
     async def status(self) -> dict:
         return {
             "symbol": self.symbol,
+            "is_running": self.is_running,
+            "buffer_size": self.internal_buffer.qsize()
+        }
             "is_running": self.is_running,
             "buffer_size": self.internal_buffer.qsize()
         }

@@ -8,13 +8,14 @@ from app.services.streaming.QueueManager import QueueManager
 from app.services.streaming.BinanceStream import BinanceStream
 from app.services.streaming.DataValidator import DataValidator
 from app.models.MarketData import MarketData
-from app.core.Logger import Logger, logger
+from app.core.logger import Logger, logger
 from json import JSONDecodeError
 from pydantic import ValidationError
 from datetime import datetime
 import json
 
 logger = logger()
+
 class MarketDataCollector:
     def __init__(self, binancestream: BinanceStream, queuemanager: QueueManager, exchange_name: str):
         self.stream = binancestream
@@ -64,7 +65,7 @@ class MarketDataCollector:
             await self.queue.publish(
                 exchange_name='market_data_exchange',
                 message=envolloppe, 
-                routing_key='market_data.*'
+                routing_key='market_data.ohlcv.btc'
             )
 
         except ValidationError as e:
@@ -79,4 +80,3 @@ class MarketDataCollector:
     async def start_collecting(self):
         logger.info("Démarrage de la collecte des données de marché...")
         await self.stream.connect_to_binance_stream()
-

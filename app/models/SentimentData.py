@@ -1,3 +1,4 @@
+from app.models.BaseDataModel import BaseDataModel
 
 class SentimentData(BaseDataModel):
     def __init__(self, symbol, timestamp, sentiment_score, sentiment_label):

@@ -23,7 +23,6 @@ class BinanceStream:
                 else:
                     print(f"Message reçu (pas de callback configuré): {message}")
             except websockets.exceptions.ConnectionClosed:
-            except websockets.exceptions.ConnectionClosed:
                 logger.error("Connection closed by the server")
                 break
             except Exception as e:
@@ -40,5 +39,6 @@ class BinanceStream:
 
     async def reconnect(self):
         await self.disconnect()
+        await self.connect_to_binance_stream()
         await self.connect_to_binance_stream()
 

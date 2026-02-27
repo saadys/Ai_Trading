@@ -5,7 +5,7 @@ from app.stream_processor.StreamProcessor import StreamProcessor
 from app.services.streaming.BinanceStream import BinanceStream
 from app.models.enums.KlineIntervalEnum import KlineIntervalEnum
 from app.models.enums.symbolEnum import symbolEnum
-from app.core.Config import Settings
+from app.core.config import Settings
 from app.core.Logger import Logger
 import asyncio
 

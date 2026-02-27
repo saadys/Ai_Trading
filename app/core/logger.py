@@ -3,10 +3,6 @@ import logging
 _logger_instance = None
 
 class LoggerConfig:
-    """
-    Une classe dédiée à la CONFIGURATION du logger.
-    On ne l'instancie qu'une seule fois.
-    """
     def __init__(self, db_session, log_level=logging.INFO):
         global _logger_instance
         
@@ -37,9 +33,7 @@ class Logger():
     @staticmethod
     def _get_logger():
         if not _logger_instance :
-            raise Exception("Logger instance is not initialized")
-        # Debug print to diagnose recursion
-        # print(f"DEBUG: _get_logger returning type: {type(_logger_instance)}")
+            LoggerConfig(db_session=None)
         return _logger_instance
 
     @staticmethod
@@ -57,6 +51,12 @@ class Logger():
     @staticmethod
     def warning(message):
         Logger._get_logger().warning(message)
+
+    @staticmethod
+    def critical(message):
+        Logger._get_logger().critical(message)
+    
+logger = Logger
 
     @staticmethod
     def critical(message):
