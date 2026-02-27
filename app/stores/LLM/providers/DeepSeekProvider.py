@@ -1,9 +1,11 @@
 from app.stores.LLM.LLMInterface import LLMInterface
 from app.stores.LLM.LLMEnum import LLMEnum, DeepSeekEnum
 from app.core.logger import Logger, logger
+from app.models.pydantic.LLMResponseValidator import LLMResponseValidator
 
 from openai import AsyncOpenAI
 import json
+from pydantic import ValidationError
 
 class DeepSeekProvider(LLMInterface):
 
@@ -44,15 +46,27 @@ class DeepSeekProvider(LLMInterface):
             if clean.endswith("```"):
                 clean = clean[:-3]
         
-            return json.loads(clean.strip())
+            parsed_json = json.loads(clean.strip())
+            
+            validated_response = LLMResponseValidator(**parsed_json)
+            return validated_response.model_dump()
         except json.JSONDecodeError as e:
-            print(f"DeepSeekProvider JSON parse error: {e}")
-            print(f"DeepSeekProvider Raw response: {response}")
-            logger.error(f"DeepSeekProvider Error: {e}")
+            logger.error(f"DeepSeekProvider JSON parse error: {e}")
+            logger.error(f"DeepSeekProvider Raw response: {response}")
             
             return {
                 "action": "HOLD",
                 "confidence_score": 0.0,
                 "risk_assessment": "EXTREME",
                 "reasoning": f"Parse Error: {str(e)}"
+            }
+        except ValidationError as e:
+            logger.error(f"DeepSeekProvider Validation error: {e}")
+            logger.error(f"DeepSeekProvider Raw response: {response}")
+            
+            return {
+                "action": "HOLD",
+                "confidence_score": 0.0,
+                "risk_assessment": "EXTREME",
+                "reasoning": f"Validation Error: {str(e)}"
             }

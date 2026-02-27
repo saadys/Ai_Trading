@@ -32,6 +32,8 @@ from app.processors.SentimentProcessor.SentimentEnum import SentimentStrategy
 from app.stores.LLM.PromptBuilder import PromptBuilder
 from app.stores.LLM.LLMEnum import LLMEnum
 from app.stores.LLM.LLMProviderFactory import LLMProviderFactory
+from app.models.pydantic.LLMResponseValidator import LLMResponseValidator
+from pydantic import ValidationError
 from app.routers.streaming_routers import streaming_router
 from app.routers.LLMRouters import llm_router
 from app.routers.base import base_router
@@ -55,7 +57,19 @@ async def AGG_Decision_LLM():
         decision = await app.llm_provider.aggregate_responses(prompt_text)
 
         if decision:
-            final = app.llm_provider.Text_To_JSON(decision) if isinstance(decision, str) else decision
+            try:
+                raw_decision = app.llm_provider.Text_To_JSON(decision) if isinstance(decision, str) else decision
+                
+                # Double vérification via Pydantic pour s'assurer que la structure est parfaite
+                validated_decision = LLMResponseValidator(**raw_decision)
+                final = validated_decision.model_dump()
+            except ValidationError as e:
+                logger.error(f"[LLM] Erreur de validation Pydantic dans main.py : {e}")
+                final = {"action": "HOLD", "confidence_score": 0.0, "risk_assessment": "EXTREME", "reasoning": "Validation Error in main.py"}
+            except Exception as e:
+                logger.error(f"[LLM] Erreur inattendue lors de la validation : {e}")
+                final = {"action": "HOLD", "confidence_score": 0.0, "risk_assessment": "EXTREME", "reasoning": "Unexpected Error in Validation"}
+
             logger.info(
                 f"[LLM Decision] Action={final.get('action')} | "
                 f"Confidence={final.get('confidence_score')} | "

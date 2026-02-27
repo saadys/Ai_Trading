@@ -1,8 +1,10 @@
 from app.stores.LLM.LLMInterface import LLMInterface
 from app.stores.LLM.LLMEnum import LLMEnum
 from app.core.logger import Logger, logger
+from app.models.pydantic.LLMResponseValidator import LLMResponseValidator
 from google import genai
 import json
+from pydantic import ValidationError
 
 class GeminiProvider(LLMInterface):
     
@@ -41,14 +43,27 @@ class GeminiProvider(LLMInterface):
             if clean.endswith("```"):
                 clean = clean[:-3]
         
-            return json.loads(clean.strip())
+            parsed_json = json.loads(clean.strip())
+            
+            # Use Pydantic to validate and format the parsed JSON
+            validated_response = LLMResponseValidator(**parsed_json)
+            return validated_response.model_dump()
 
         except json.JSONDecodeError as e:
-            print(f"GeminiProvider JSON parse error: {e}")
-            print(f"GeminiProvider Raw response: {response}")
+            logger.error(f"GeminiProvider JSON parse error: {e}")
+            logger.error(f"GeminiProvider Raw response: {response}")
             return {
                 "action": "HOLD",
                 "confidence_score": 0.0,
                 "risk_assessment": "EXTREME",
                 "reasoning": f"Parse Error: {str(e)}"
+            }
+        except ValidationError as e:
+            logger.error(f"GeminiProvider Validation error: {e}")
+            logger.error(f"GeminiProvider Raw response: {response}")
+            return {
+                "action": "HOLD",
+                "confidence_score": 0.0,
+                "risk_assessment": "EXTREME",
+                "reasoning": f"Validation Error: {str(e)}"
             }

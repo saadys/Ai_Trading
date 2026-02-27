@@ -13,7 +13,6 @@ class LLMController:
         try:
             logger.info("[LLMController] Déclenchement manuel d'une décision LLM...")
             
-            # 1. Récupération du contexte
             context = getattr(self.app, "context_aggregator", None)
             if not context:
                 raise HTTPException(status_code=500, detail="ContextAggregator non initialisé.")
