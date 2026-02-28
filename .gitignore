@@ -98,3 +98,6 @@ credentials.json
 dist/
 build/
 *.egg-info/
+
+# TestSprite
+testsprite_tests/
