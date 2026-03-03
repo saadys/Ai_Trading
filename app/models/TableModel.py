@@ -1,6 +1,6 @@
-
 from app.models.BaseDataModel import BaseDataModel
 from app.models.db_schemas.mini_Trading.schemas.MarketData import MarketData
+from app.models.db_schemas.mini_Trading.schemas.MLPrediction import MLPrediction
 from typing import List
 from datetime import datetime
 import sys
@@ -11,6 +11,21 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../../..'))
 class TableModel(BaseDataModel):
     def __init__(self,database_client):
         super().__init__(database_client=database_client)
+
+    async def save_ml_prediction_batch(self, message: List[dict]):
+        async with self.database_client() as session:
+            async with session.begin():
+                pred_batch = []
+                for payload in message:
+                    if isinstance(payload.get('timestamp'), str):
+                        try:
+                            payload['timestamp'] = datetime.fromisoformat(payload['timestamp'].replace('Z', '+00:00'))
+                        except ValueError:
+                            pass
+                    pred_batch.append(MLPrediction(**payload))
+                session.add_all(pred_batch)
+        return pred_batch
+
 
     
     async def save_ohlcv_batch(self, message: List[dict]):

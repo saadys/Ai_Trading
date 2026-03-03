@@ -8,6 +8,7 @@ from app.services.streaming.QueueManager import QueueManager
 from app.models.TableModel import TableModel
 from app.processors.SentimentProcessor.SentimentInterface import SentimentInterface
 from app.core.logger import Logger, logger
+from datetime import datetime
 
 
 logger = Logger()
@@ -39,23 +40,34 @@ class SentimentProcessor():
             payload = message.get("payload")
 
             if msg_type == "Data_News":
-                logger.info("Traitement du message Data_News")
+                logger.info(
+                    f"\n{'='*40}\n"
+                    f"📰 NOUVELLE NEWS DÉTECTÉE 📰\n"
+                    f"Titre : {title[:50]}...\n"
+                    f"Source: {payload.get('source', 'News')}\n"
+                    f"{'='*40}\n"
+                )
 
-                title = payload.get("title", "Sans titre")
-                Contenu=payload.get("content", "Sans contenu")
-
-                Logger.info(f"Analyse du sentiment pour : {title[:50]}...")
                 score,label = await self.strategy.analyse_News(Contenu)
 
-                Logger.info(f"Sentiment : {label} ({score:.2f})")
+                Logger.info(
+                    f"\n{'='*40}\n"
+                    f"🎯 ANALYSE SENTIMENT (FinBERT) 🎯\n"
+                    f"Sentiment   : {label}\n"
+                    f"Probabilité : {score:.2f}\n"
+                    f"{'='*40}\n"
+                )
 
                 envellope = {
                     "type": "Sentiment",
                     "payload": {
+                        "symbol": payload.get("symbol", "BTCUSDT"),
+                        "timestamp": datetime.now().isoformat(),
                         "title": title,
                         "content": Contenu,
-                        "score": score,
-                        "label": label
+                        "sentiment_score": score,
+                        "sentiment_label": label,
+                        "source": payload.get("source", "News")
                     }
                 }
 

@@ -7,6 +7,8 @@ from app.services.streaming.QueueManager import QueueManager
 from app.services.streaming.DataValidator import DataValidator
 from app.services.streaming.IndicatorValidator import IndicatorValidator
 from app.models.pydantic.SentimentValidator import SentimentValidator
+from app.MLearning.preprocessing.OnlineFeatureEngineer import OnlineFeatureEngineer
+from app.controllers.PredLSTMControllers import lstm_controller
 from app.core.logger import Logger, logger
 from pydantic import ValidationError
 from datetime import datetime
@@ -24,6 +26,9 @@ class ContextAggregator:
             "account": {}
         }
         
+        # Initialisation de l'ingénieur de variables ML en streaming
+        self.feature_engineer = OnlineFeatureEngineer()
+        
 
     async def start(self):
         if not self.queue.connection or self.queue.connection.is_closed:
@@ -37,6 +42,7 @@ class ContextAggregator:
             queue_name='context_aggregator_queue',
             on_message_callback=self.process_message
         )
+
         logger.info("ContextAggregator started and listening.") 
 
     async def process_message(self, message: dict):
@@ -89,6 +95,48 @@ class ContextAggregator:
             
             logger.info(f"OHLCV validé et mis à jour - Symbol: {validated_data.symbol}, Close: {validated_data.close_price}")
             
+            # 1. Ajouter la bougie au buffer d'ingénierie
+            self.feature_engineer.add_candle(self.state["OHLCV"])
+            
+            # 2. Si le buffer a assez d'historique (192+), extraire les features et prédire
+            if self.feature_engineer.is_ready():
+                try:
+                    features_tensor = self.feature_engineer.get_features()
+                    if features_tensor is not None:
+                        # La features_tensor est de forme (1, 192, 21), lstm_controller s'attend à du plat ou list[list]
+                        # On cast en liste pour le pred controller
+                        features_list = features_tensor.tolist()
+                        
+                        # lstm_controller.predict gère automatiquement le reshape via torch.tensor
+                        lstm_result = lstm_controller.predict(features_list[0], threshold=0.5)
+                        
+                        if lstm_result.get("status"):
+                            prediction_payload = {
+                                "type": "ml_prediction",
+                                "payload": {
+                                    "symbol": validated_data.symbol,
+                                    "timestamp": validated_data.close_time.isoformat(),
+                                    "model": "LSTM_Production_Model",
+                                    "prediction": lstm_result.get("prediction"),
+                                    "probability": lstm_result.get("probability")
+                                }
+                            }
+                            # 3. Publier asynchronement au RabbitMQ pour sauvegarde & broadcast
+                            await self.queue.publish(
+                                exchange_name='market_data_exchange',
+                                message=prediction_payload,
+                                routing_key='market_data.prediction.lstm'
+                            )
+                            logger.info(
+                                f"\n{'='*40}\n"
+                                f"   PRÉDICTION LSTM EN DIRECT \n"
+                                f"   Signal : {lstm_result.get('prediction')}\n"
+                                f"   Probabilité : {lstm_result.get('probability')}\n"
+                                f"{'='*40}\n"
+                            )
+                except Exception as ml_err:
+                    logger.error(f"Erreur lors de l'inférence LSTM: {ml_err}")
+                    
         except ValidationError as ve:
             logger.error(f"Erreur validation OHLCV (Pydantic): {ve}")
         except Exception as e:
@@ -141,7 +189,22 @@ class ContextAggregator:
             logger.error(f"Erreur traitement SENTIMENT: {e}")
 
     async def _process_ml_pred(self, payload: dict):
-        pass
+        try:
+            if not payload:
+                logger.warning("Payload ML PREDICTION vide")
+                return None
+                
+            self.state["ml_prediction"] = {
+                "symbol": payload.get("symbol"),
+                "timestamp": payload.get("timestamp"),
+                "model": payload.get("model"),
+                "prediction": payload.get("prediction"),
+                "probability": payload.get("probability")
+            }
+            logger.info(f"ML Prediction mise à jour en mémoire pour le LLM - Symbol: {payload.get('symbol')}, Pred: {payload.get('prediction')}")
+            
+        except Exception as e:
+            logger.error(f"Erreur traitement ML PREDICTION: {e}")
 
     async def _process_account(self, payload: dict):
         try:

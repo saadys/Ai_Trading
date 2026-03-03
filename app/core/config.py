@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     #Postgres_Host : str = "localhost"
     #Postgres_User : str = "postgres"
     #Postgres_Password : str = "saadys"
-    Postgres_Port : int = 5432
+    Postgres_Port : int = 5433
     Postgres_DBName : str = "Ai_Trading"
     Postgres_Host : str = "localhost"
     Postgres_User : str = "postgres"

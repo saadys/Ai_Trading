@@ -27,6 +27,8 @@ from app.processors.SentimentProcessor.SentimentStrategypattern import Sentiment
 from app.processors.SentimentProcessor.SentimentProcessor import SentimentProcessor
 from app.processors.SentimentProcessor.SentimentProviderFactory import SentimentStrategyFactory
 from app.processors.SentimentProcessor.SentimentEnum import SentimentStrategy
+from app.pipeline.collectors.NewsCollector import NewsCollector
+
 
 # LLM
 from app.stores.LLM.PromptBuilder import PromptBuilder
@@ -37,11 +39,14 @@ from pydantic import ValidationError
 from app.routers.streaming_routers import streaming_router
 from app.routers.LLMRouters import llm_router
 from app.routers.base import base_router
+from app.routers.PredLSTMRouters import router as pred_lstm_router
 from app.models.db_schemas.mini_Trading.schemas import SQLAlchemyBase
 
 app = FastAPI()
+
 app.include_router(streaming_router)
 app.include_router(llm_router)
+app.include_router(pred_lstm_router, prefix="/api/v1")
 settings = get_settings()
 
 
@@ -71,10 +76,13 @@ async def AGG_Decision_LLM():
                 final = {"action": "HOLD", "confidence_score": 0.0, "risk_assessment": "EXTREME", "reasoning": "Unexpected Error in Validation"}
 
             logger.info(
-                f"[LLM Decision] Action={final.get('action')} | "
-                f"Confidence={final.get('confidence_score')} | "
-                f"Risk={final.get('risk_assessment')} | "
-                f"Reasoning={final.get('reasoning')}"
+                f"\n{'='*50}\n"
+                f" DÉCISION IA FINALE (GEMINI + LSTM) \n"
+                f"Action    : {final.get('action')}\n"
+                f"Confiance : {final.get('confidence_score')} %\n"
+                f"Risque    : {final.get('risk_assessment')}\n"
+                f"Raison    : {final.get('reasoning')}\n"
+                f"{'='*50}\n"
             )
         else:
             logger.warning("[LLM] Aucune décision reçue du provider.")
@@ -115,7 +123,7 @@ async def startup_event():
 
         # --- BinanceStream + StreamProcessor ---
         symbol_value = SymbolEnum.BTCUSDT.value.lower()
-        interval_value = KlineIntervalEnum.MIN_1.value
+        interval_value = KlineIntervalEnum.MIN_15.value
         socket_url = f"wss://stream.binance.com:9443/ws/{symbol_value}@kline_{interval_value}"
         binance_stream = BinanceStream(socket_url)
         data_collector = MarketDataCollector(binance_stream, app.queue_manager, "Binance")
@@ -130,10 +138,15 @@ async def startup_event():
         Logger.info(f"Flux et calcul d'indicateurs lancés pour {symbol_value.upper()}.")
 
         # La partie Sentiment :
+        app.news_collector = NewsCollector(app.queue_manager, exchange_name='market_data_exchange', api_key=settings.NewsApi_Key)
+        asyncio.create_task(app.news_collector.start_collection_loop())
+        Logger.info(" Scraper d'Actualités (NewsCollector) CONNECTÉ à l'API.")
+
+        # Démarrer l'analyseur (NLP FinBERT)
         strategy_type = SentimentStrategy.FINBERT.value
         app.sentiment_processor = SentimentProcessor(app.queue_manager, SentimentStrategyFactory.get_strategy(strategy_type), app.database_client)
         asyncio.create_task(app.sentiment_processor.start())
-        Logger.info("SentimentProcessor démarré.")
+        Logger.info("Module d'Analyse NLP des Vraies Nouvelles (FinBERT) PRÊT.")
 
         # ContextAggregator (accumule toutes les données: OHLCV, indicateurs, sentiment, ML)
         app.context_aggregator = ContextAggregator(app.queue_manager)

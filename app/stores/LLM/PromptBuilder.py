@@ -36,7 +36,7 @@ class PromptBuilder:
 
             [3] ALTERNATIVE ALPHA
             - Market Sentiment: {sentiment.get("sentiment_label", "N/A")} (Score: {sentiment.get("sentiment_score", "N/A")}) via {sentiment.get("source", "N/A")}
-            - ML Prediction: {ml_prediction.get("direction", "N/A")} (Confidence: {ml_prediction.get("probability", "N/A")}%)
+            - ML Prediction: {ml_prediction.get("prediction", "N/A")} (Confidence: {ml_prediction.get("probability", "N/A")})
 
             [4] PORTFOLIO STATE
             - Balance: ${account.get("balance", "N/A")} | Open Positions: {account.get("open_positions", "N/A")}

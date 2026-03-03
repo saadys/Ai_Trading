@@ -18,6 +18,7 @@ class DataSaver:
         self.ohlcv_batch = []
         self.indicator_batch = []
         self.data_news_batch = []
+        self.ml_prediction_batch = []
         self.batch_size = batch_size
 
     async def start(self):
@@ -74,5 +75,22 @@ class DataSaver:
                         logger.error(f"Database error while saving DATA_NEWS: {db_e}", exc_info=True)
                     finally:
                         self.data_news_batch = []
+                        
+            elif message.get("type") == "ml_prediction":
+                self.ml_prediction_batch.append(message["payload"])
+                
+                # On peut choisir un batch plus petit pour la prédiction ML, ou garder le même
+                if len(self.ml_prediction_batch) >= 1: 
+                    # On sauvegarde la prédiction immédiatement (batch de 1) 
+                    # pour garder le focus sur la réactivité, car c'est un signal de trading.
+                    logger.info("New ML Prediction received. Saving to DB...")
+                    try:
+                        await self.table_model.save_ml_prediction_batch(self.ml_prediction_batch)
+                        logger.info("ML Prediction saved successfully.")
+                    except Exception as db_e:
+                        logger.error(f"Database error while saving ML Prediction: {db_e}", exc_info=True)
+                    finally:
+                        self.ml_prediction_batch = []
+                        
         except Exception as e:
             logger.error(f"Error parsing or processing message in DataSaver: {e}", exc_info=True)

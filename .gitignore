@@ -101,3 +101,11 @@ build/
 
 # TestSprite
 testsprite_tests/
+
+
+/artifacts/
+*.pkl
+
+
+*.txt
+*.md

@@ -100,6 +100,7 @@ class QueueManager:
             'context_aggregator_queue',
             'alert_queue',
             'sentiment_queue',          
+            'lstm_predictions_queue',
             'backtest_queue',
             'dead_letter_queue'
         ]
@@ -137,6 +138,9 @@ class QueueManager:
             
             # CONTEXT AGGREGATOR QUEUE : Reçoit TOUT pour agrégation
             ('market_data_exchange', 'context_aggregator_queue', 'market_data.#'),
+            
+            # LSTM PREDICTIONS QUEUE : Reçoit que les preds pour DB saver et ContextAggregator
+            ('market_data_exchange', 'lstm_predictions_queue', 'market_data.prediction.lstm'),
             
             # ALERT QUEUE
             ('indicator_exchange', 'alert_queue', ''),

@@ -58,9 +58,9 @@ class Logger():
     
 logger = Logger
 
-    @staticmethod
-    def critical(message):
-        Logger._get_logger().critical(message)
+@staticmethod
+def critical(message):
+    Logger._get_logger().critical(message)
     
 def logger():
     return Logger
