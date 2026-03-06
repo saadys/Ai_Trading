@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from app.auth.routes import router as auth_router
 
 # Core
 from app.core.config import Settings, get_settings
@@ -190,3 +191,4 @@ async def shutdown_event():
 
 app.include_router(base_router)
 app.include_router(streaming_router)
+app.include_router(auth_router)
