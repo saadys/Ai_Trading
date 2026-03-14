@@ -6,7 +6,7 @@ from app.services.streaming.BinanceStream import BinanceStream
 from app.models.enums.KlineIntervalEnum import KlineIntervalEnum
 from app.models.enums.symbolEnum import symbolEnum
 from app.core.config import Settings
-from app.core.Logger import Logger
+from app.core.logger import Logger
 import asyncio
 
 
@@ -33,7 +33,7 @@ class StreamingController:
         if not symbol:
             symbol = symbolEnum.BTCUSDT.value
         if not interval:
-            interval = KlineIntervalEnum.MIN_1.value
+            interval = KlineIntervalEnum.MIN_15.value
 
         symbol = symbol.lower()
 

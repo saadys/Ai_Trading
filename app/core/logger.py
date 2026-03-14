@@ -9,22 +9,29 @@ class LoggerConfig:
         if _logger_instance is not None:
             return
 
+        import sys
+        
         logger = logging.getLogger('trading_ai_logger')
         logger.setLevel(log_level)
+        logger.propagate = False  # Empêche uvicorn de supprimer ou de dupliquer les logs
 
-        formatter = logging.Formatter(
-            '%(asctime)s - %(levelname)s - %(message)s'
-        )
-        #pour local
-        console_handler = logging.StreamHandler()
-        console_handler.setFormatter(formatter)
-        logger.addHandler(console_handler)
+        if not logger.handlers:
+            formatter = logging.Formatter(
+                '%(asctime)s - %(levelname)s - %(message)s'
+            )
+            # pour local (affichage forcé dans la console uvicorn)
+            console_handler = logging.StreamHandler(sys.stdout)
+            console_handler.setFormatter(formatter)
+            logger.addHandler(console_handler)
 
-        #SQlAlchemy:
-        if db_session:
-            db_handler = SQLAlchemyHandler(session=db_session)
-            db_handler.setFormatter(formatter)
-            logger.addHandler(db_handler)
+            # SQlAlchemy (si implémenté plus tard)
+            if db_session:
+                try:
+                    db_handler = SQLAlchemyHandler(session=db_session)
+                    db_handler.setFormatter(formatter)
+                    logger.addHandler(db_handler)
+                except NameError:
+                    pass
 
         _logger_instance = logger
 

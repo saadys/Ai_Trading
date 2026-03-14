@@ -17,8 +17,8 @@ class OnlineFeatureEngineer:
         self.lookback = lookback
         
         if scaler_path is None:
-            base_dir = os.path.dirname(os.path.abspath(__file__))
-            self.scaler_path = os.path.join(base_dir, 'artifacts', 'scaler.pkl')
+            # On utilise le chemin relatif correct vers le dossier artifacts local
+            self.scaler_path = os.path.join(os.path.dirname(__file__), "artifacts", "scaler.pkl")
         else:
             self.scaler_path = scaler_path
             
@@ -32,13 +32,16 @@ class OnlineFeatureEngineer:
 
         self.raw_cols = ['Open time', 'Open', 'High', 'Low', 'Close', 'Volume']
         self.scale_cols = [
-            'Open_diff', 'High_diff', 'Low_diff', 'Close_diff', 'Volume',
-            'dist_ema_20', 'dist_ema_50', 'dist_ema_200',
-            'rsi_norm', 'atr_ratio',
+            # 14 features scalées par RobustScaler
+            'Open_diff', 'High_diff', 'Low_diff', 'Close_diff',
+            'dist_ema_50', 'dist_ema_200',
+            'atr_ratio',
             'macd_norm', 'macd_sig_norm', 'macd_hist_norm',
-            'hour_sin', 'hour_cos', 'day_of_week_sin', 'day_of_week_cos', 'month_sin', 'month_cos',
             'Volume_log',
-            'VMD_Mode1_diff', 'VMD_Mode2', 'VMD_Mode3'
+            'VMD_Mode1_diff', 'VMD_Mode2', 'VMD_Mode3',
+            # 7 features passthrough 
+            'hour_sin', 'hour_cos', 'day_of_week_sin', 'day_of_week_cos', 'month_sin', 'month_cos',
+            'rsi_norm',
         ]
         
     def add_historical_data(self, history: List[dict]):
@@ -63,13 +66,9 @@ class OnlineFeatureEngineer:
             self.buffer.pop(0)
 
     def is_ready(self) -> bool:
-        """Retourne True si le buffer a assez de données pour générer la séquence LSTM"""
-        return len(self.buffer) >= self.lookback + 200 # Besoin de ~200 pour EMA200 
+        return len(self.buffer) >= self.lookback + 200 
 
     def _apply_vmd(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Applique VMD sur la fenêtre glissante.
-        """
         closes = df['Close'].values
         alpha = 2000       # moderate bandwidth constraint
         tau = 0.           # noise-tolerance (no strict fidelity enforcement)
@@ -83,7 +82,6 @@ class OnlineFeatureEngineer:
             df['VMD_Mode1'] = u[0, :]
             df['VMD_Mode2'] = u[1, :]
             df['VMD_Mode3'] = u[2, :]
-            # Pour la stationnarité, appliquer la différence sur le mode 1 (comme dans CryptoDataProcessor)
             df['VMD_Mode1_diff'] = df['VMD_Mode1'].diff()
         except Exception as e:
             print(f"[OnlineFeatureEngineer] Erreur VMD: {e}")
@@ -94,10 +92,6 @@ class OnlineFeatureEngineer:
         return df
 
     def get_features(self) -> Optional[np.ndarray]:
-        """
-        Calcule les variables et renvoie la matrice (1, lookback, 21) prête pour le LSTM.
-        Retourne None si pas assez de données.
-        """
         if not self.is_ready():
             print(f"[OnlineFeatureEngineer] Buffer insuffisant: {len(self.buffer)}/{self.lookback + 200}")
             return None
@@ -168,29 +162,26 @@ class OnlineFeatureEngineer:
         
         # 9. Sélectionner les colonnes exactes attendues par le StandardScaler/RobustScaler
         try:
-            # Les 15 variables scalées exactement telles que demandées par scaler.pkl
+            # Les 14 variables scalées et 7 variables non scalées telles que définies dans l'entrainement
             scale_cols_exact = [
-                'dist_ema_20', 'dist_ema_50', 'dist_ema_200',
-                'rsi_norm', 'atr_ratio',
-                'macd_norm', 'macd_sig_norm', 'macd_hist_norm',
-                'hour_sin', 'hour_cos', 'day_of_week_sin', 'day_of_week_cos', 'month_sin', 'month_cos',
-                'Volume_log'
-            ]
-            
-            # Application du Scaler sur ces 15 colonnes uniquement
-            X_scale_part = self.scaler.transform(df_recent[scale_cols_exact].values)
-            # L'ancien modèle à 14 features utilisait d'autres colonnes.
-            # Avec 21 features, c'est : 15 du scaler + 6 des différences temporelles et VMD.
-            passthrough_cols = [
                 'Open_diff', 'High_diff', 'Low_diff', 'Close_diff',
-                'VMD_Mode1_diff', 'VMD_Mode2' # On drop VMD_Mode3 si le total doit être 21 (15+6=21)
+                'dist_ema_50', 'dist_ema_200',
+                'atr_ratio',
+                'macd_norm', 'macd_sig_norm', 'macd_hist_norm',
+                'Volume_log',
+                'VMD_Mode1_diff', 'VMD_Mode2', 'VMD_Mode3'
             ]
             
-            # Le vrai test d'entrainement nous montre que le modèle .pth attend torch.Size([512, 21])
             X_scale_part = self.scaler.transform(df_recent[scale_cols_exact].values)
+            passthrough_cols = [
+                'hour_sin', 'hour_cos',
+                'day_of_week_sin', 'day_of_week_cos',
+                'month_sin', 'month_cos',
+                'rsi_norm'
+            ]
+            
             X_pass_part = df_recent[passthrough_cols].values
             
-            # Concaténation finale (21 colonnes)
             X_final = np.hstack([X_scale_part, X_pass_part])
             
             X_tensor_ready = X_final.reshape(1, self.lookback, 21)

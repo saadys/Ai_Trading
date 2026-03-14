@@ -96,3 +96,40 @@ NEWSDATA_API_KEY=votre_cle_newsdata
    ```bash
    uvicorn main:app --reload
    ```
+
+## Utilisation de la Base de Données
+
+Le projet utilise **PostgreSQL** comme base de données principale (nommée `Ai_Trading`).
+L'ORM SQLAlchemy est utilisé en conjonction avec **Alembic** pour la gestion des schémas (migrations).
+
+- **Connexion locale** : Vous pouvez vous connecter à la base de données via n'importe quel client SQL (comme DBeaver, pgAdmin, ou DataGrip) en utilisant les identifiants fournis dans votre fichier `.env` (par défaut : utilisateur `postgres` sur `localhost:5432`).
+- **Tables principales** : La base stocke les données historiques (OHLCV), les indicateurs techniques pré-calculés, l'historique des prédictions des modèles ML ainsi que l'historique des décisions de trading prises par le LLM.
+
+## Utilisation des APIs (FastAPI)
+
+L'application expose plusieurs endpoints RESTful. Une fois l'application lancée via `uvicorn`, vous pouvez tester toutes les routes directement depuis l'interface interactive générée automatiquement :
+👉 **Swagger UI** : [http://localhost:8000/docs](http://localhost:8000/docs)
+👉 **ReDoc** : [http://localhost:8000/redoc](http://localhost:8000/redoc)
+
+### Principales routes disponibles :
+
+#### 🔄 Streaming & Ingestion (WebSockets)
+
+Gère le flux de données en direct depuis l'exchange (ex: Binance).
+
+- `POST /streaming/start` : Lance l'acquisition continue des données du marché en temps réel.
+- `POST /streaming/stop` : Arrête proprement le flux de données.
+- `GET /streaming/status` : Retourne l'état actuel du processus de streaming.
+
+#### 🧠 Décision LLM
+
+Gère l'interface avec l'Intelligence Artificielle générative pour le trading.
+
+- `GET /llm/context` : Récupère le snapshot complet du contexte actuel (Prix actuels, Indicateurs RSI/MACD/etc., Sentiment actuel des actualités, et les dernières prédictions). C'est ce contexte qui est envoyé à l'IA.
+- `POST /llm/provider/{provider_name}` : Permet de basculer à chaud entre différents modèles LLM (ex: Gemini, OpenAI) pour la prise de décision.
+
+#### 📈 Prédiction Machine Learning (LSTM)
+
+Gère l'inférence via les modèles de Deep Learning.
+
+- `POST /api/v1/lstm/predict` : Permet d'envoyer un vecteur de features temporelles (séquence) au modèle LSTM pour obtenir une prédiction sur la trajectoire future des prix.

@@ -9,9 +9,9 @@ from pydantic import ValidationError
 from datetime import datetime
 import asyncio
 from newsdataapi import NewsDataApiClient
-from app.core.Logger import Logger, logger
+from app.core.logger import Logger, logger
 
-logger = logger()
+logger = Logger()
 
 class NewsCollector:
     def __init__(self, queuemanager: QueueManager, exchange_name: str, api_key: str = None):

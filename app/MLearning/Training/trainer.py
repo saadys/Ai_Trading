@@ -1,8 +1,10 @@
 import sys
 import os
-
+import logging
 # Fix OpenMP runtime error: initializing libiomp5md.dll, but found libiomp5md.dll already initialized
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
+logger = logging.getLogger(__name__)
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
 
@@ -22,12 +24,13 @@ from app.MLearning.preprocessing.CryptoDataProcessor import CryptoDataProcessor
 import copy
 from typing import Tuple, List, Optional
 from sklearn.preprocessing import RobustScaler
+import joblib
 
 
 import mlflow
 
-mlflow.set_tracking_uri("postgresql://postgres:saadys@localhost:5432/mlflow_db")
-mlflow.set_experiment("Model LSTM V6 - Production Architecture")
+mlflow.set_tracking_uri("postgresql://postgres:saadys@localhost:5433/mlflow_db")
+mlflow.set_experiment("Cène (dernier repas)")
 
 
 
@@ -52,7 +55,7 @@ class EarlyStopping:
         elif score < self.best_score + self.delta:
             self.counter += 1
             if self.verbose:
-                print(f'EarlyStopping counter: {self.counter} out of {self.patience}')
+                logger.info(f'EarlyStopping counter: {self.counter} out of {self.patience}')
             if self.counter >= self.patience:
                 self.early_stop = True
         else:
@@ -62,7 +65,7 @@ class EarlyStopping:
 
     def save_checkpoint(self, val_loss, model):
         if self.verbose:
-            print(f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...')
+            logger.info(f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...')
         self.best_model_state = copy.deepcopy(model.state_dict())
         self.val_loss_min = val_loss
 
@@ -108,7 +111,7 @@ class Trainer:
             val_loader: DataLoader, 
             epochs: int = 100) -> nn.Module:
         
-        print(f"Starting training on {self.device} for {epochs} epochs...")
+        logger.info(f"Starting training on {self.device} for {epochs} epochs...")
         
         train_losses = []
         val_losses = []
@@ -191,29 +194,21 @@ class Trainer:
                 r2_score = 1 - (ss_res / (ss_tot + epsilon))
                 
                 if epoch == 0:
-                    print(f"\n DIAGNOSTIC (Epoch 1):")
-                    print(f"   Predictions: min={all_preds.min():.4f}, max={all_preds.max():.4f}, mean={all_preds.mean():.4f}, std={all_preds.std():.4f}")
-                    print(f"   Targets:     min={all_targets.min():.4f}, max={all_targets.max():.4f}, mean={all_targets.mean():.4f}, std={all_targets.std():.4f}")
-                    print(f"   Pred variance: {all_preds.std():.6f} (should be > 0.01)")
+                    logger.info("DIAGNOSTIC (Epoch 1):")
+                    logger.info(f"Predictions: min={all_preds.min():.4f}, max={all_preds.max():.4f}, mean={all_preds.mean():.4f}, std={all_preds.std():.4f}")
+                    logger.info(f"Targets: min={all_targets.min():.4f}, max={all_targets.max():.4f}, mean={all_targets.mean():.4f}, std={all_targets.std():.4f}")
+                    logger.info(f"Pred variance: {all_preds.std():.6f} (should be > 0.01)")
                     if all_preds.std() < 0.01:
-                        print(f" WARNING: Model is predicting almost constant values!")
+                        logger.warning("Model is predicting almost constant values!")
 
-                print(f'Epoch {epoch+1}/{epochs} | Train Loss: {epoch_train_loss:.6f} | Val Loss: {epoch_val_loss:.6f} | R2: {r2_score:.4f}')
+                logger.info(f'Epoch {epoch+1}/{epochs} | Train Loss: {epoch_train_loss:.6f} | Val Loss: {epoch_val_loss:.6f} | R2: {r2_score:.4f}')
                 
                 self.early_stopping(epoch_val_loss, self.model)
-                
-                if self.early_stopping.early_stop:
-                    print("Early stopping triggered.")
-                    break
-            
-                if self.early_stopping.best_model_state:
-                    self.model.load_state_dict(self.early_stopping.best_model_state)
-                    print("Loaded best model state from early stopping checkpoint.")
-                
+
                 self.scheduler.step(epoch_val_loss)
-                
+
                 current_lr = self.optimizer.param_groups[0]['lr']
-                
+
                 mlflow.log_metrics(
                     {
                         "train_loss": epoch_train_loss,
@@ -222,12 +217,20 @@ class Trainer:
                         "RMSE": rmse,
                         "MAPE": mape,
                         "R2_Score": r2_score,
-                        "learning_rate": current_lr  
+                        "learning_rate": current_lr
                     },
                     step=epoch
                 )
-                mlflow.pytorch.log_model(self.model, name=f"checkpoint_{epoch}")
-                
+
+                if self.early_stopping.early_stop:
+                    logger.info("Early stopping triggered.")
+                    break
+
+            # Restore best model AFTER the loop
+            if self.early_stopping.best_model_state:
+                self.model.load_state_dict(self.early_stopping.best_model_state)
+                logger.info("Loaded best model state from early stopping checkpoint.")
+
             self.model_info = mlflow.pytorch.log_model(self.model, name="final_model")
 
                 
@@ -235,7 +238,7 @@ class Trainer:
         return self.model
 
     def quantize_model(self, save_path: str = "models/lstm_model_quantized.pth"):
-        print("Applying Dynamic Quantization...")
+        logger.info("Applying Dynamic Quantization...")
         self.model.to('cpu')
         self.model.eval()
         
@@ -243,7 +246,7 @@ class Trainer:
             self.model, {nn.LSTM, nn.Linear}, dtype=torch.qint8
         )
         
-        print(f"Quantization complete. Saving to {save_path}...")
+        logger.info(f"Quantization complete. Saving to {save_path}...")
         torch.save(quantized_model.state_dict(), save_path)
         return quantized_model
 
@@ -261,36 +264,32 @@ class AdvancedDataPipeline:
             'macd_norm', 'macd_sig_norm', 'macd_hist_norm', 
             'hour_sin', 'hour_cos', 'day_of_week_sin', 'day_of_week_cos', 'month_sin', 'month_cos', 
             'Volume_log', 
-            'VMD_Mode1_diff', 'VMD_Mode2', 'VMD_Mode3'  # ← VMD_Mode1 differenced for stationarity
+            'VMD_Mode1_diff', 'VMD_Mode2', 'VMD_Mode3'  
         ]
         self.target_col = 'Target'
 
     def load_and_prep(self) -> Tuple[DataLoader, DataLoader, DataLoader, int]:
-        print(f"Loading CSV from {self.csv_path}...")
+        logger.info(f"Loading CSV from {self.csv_path}...")
         try:
             df = pd.read_csv(self.csv_path)
             if 'Open time' in df.columns:
                 df['Open time'] = pd.to_datetime(df['Open time'])
                 df = df.sort_values('Open time').reset_index(drop=True)
         except Exception as e:
-            print(f"Error reading CSV file: {e}")
+            logger.exception(f"Error reading CSV file: {e}")
             raise
  
-        if 'VMD_Mode1' in df.columns:
-            df['VMD_Mode1_diff'] = df['VMD_Mode1'].diff()
-            print("✓ Created VMD_Mode1_diff for stationarity")
-
         initial_len = len(df)
         df = df.dropna()
         dropped_len = len(df)
-        print(f"Dropped {initial_len - dropped_len} row(s) containing NaNs.")
+        logger.info(f"Dropped {initial_len - dropped_len} row(s) containing NaNs.")
         
         if dropped_len == 0:
             raise ValueError("All data dropped! Check your data source.")
 
         missing_cols = [c for c in self.feature_cols if c not in df.columns]
         if missing_cols:
-            print(f"Warning: Missing columns {missing_cols}. Ignoring them.")
+            logger.warning(f"Missing columns {missing_cols}. Ignoring them.")
             self.feature_cols = [c for c in self.feature_cols if c in df.columns]
 
         n = len(df)
@@ -302,7 +301,7 @@ class AdvancedDataPipeline:
             'atr_ratio',
             'macd_norm', 'macd_sig_norm', 'macd_hist_norm',
             'Volume_log',
-            'VMD_Mode1_diff', 'VMD_Mode2', 'VMD_Mode3'  # ← VMD_Mode1 → VMD_Mode1_diff
+            'VMD_Mode1_diff', 'VMD_Mode2', 'VMD_Mode3' 
         ]
         
         passthrough_cols = [
@@ -312,8 +311,8 @@ class AdvancedDataPipeline:
             'rsi_norm' 
         ]
         
-        print(f"✓ Features to scale: {len(scale_cols)}")
-        print(f"✓ Features passthrough (pre-normalized): {len(passthrough_cols)}")
+        logger.info(f"Features to scale: {len(scale_cols)}")
+        logger.info(f"Features passthrough (pre-normalized): {len(passthrough_cols)}")
         
         # Ensure all columns are present
         scale_cols = [c for c in scale_cols if c in self.feature_cols]
@@ -328,7 +327,7 @@ class AdvancedDataPipeline:
         y_val_raw = df[self.target_col].iloc[train_idx:val_idx].values.reshape(-1, 1)
         y_test_raw = df[self.target_col].iloc[val_idx:].values.reshape(-1, 1)
 
-        print("Fitting scalers on training data...")
+        logger.info("Fitting scalers on training data...")
         
         # Fit scaler on scale_cols
         if scale_cols:
@@ -351,18 +350,18 @@ class AdvancedDataPipeline:
         X_test_final = np.hstack([X_test_scale_part, X_test_pass])
         
         # Target is Q-Label [0,1], no scaling needed
-        print("Target is Q-Labels [0,1]. No target scaling applied.")
+        logger.info("Target is Q-Labels [0,1]. No target scaling applied.")
         y_train_scaled = y_train_raw.flatten()
         y_val_scaled = y_val_raw.flatten()
         y_test_scaled = y_test_raw.flatten()
         
-        print(f"Target distribution: mean={y_train_scaled.mean():.4f}, std={y_train_scaled.std():.4f}")
+        logger.info(f"Target distribution: mean={y_train_scaled.mean():.4f}, std={y_train_scaled.std():.4f}")
 
         X_train_seq, y_train_seq = self._create_sequences(X_train_final, y_train_scaled)
         X_val_seq, y_val_seq = self._create_sequences(X_val_final, y_val_scaled)
         X_test_seq, y_test_seq = self._create_sequences(X_test_final, y_test_scaled)
 
-        print(f"Train seq: {X_train_seq.shape}, Val seq: {X_val_seq.shape}, Test seq: {X_test_seq.shape}")
+        logger.info(f"Train seq: {X_train_seq.shape}, Val seq: {X_val_seq.shape}, Test seq: {X_test_seq.shape}")
 
         # 6. Create DataLoaders
         train_loader = DataLoader(TensorDataset(torch.FloatTensor(X_train_seq), torch.FloatTensor(y_train_seq)), 
@@ -385,33 +384,38 @@ class AdvancedDataPipeline:
         return np.array(Xs), np.array(ys)
 
 def main():
-    CSV_FILE = os.path.join("Ai_Trading", "data", "NewdataFinal_corrected.csv")
-    
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(name)s - %(message)s"
+    )
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    # trainer.py est à Ai_Trading/app/MLearning/Training/
+    # enriched_data.csv est produit par CryptoDataProcessor dans Ai_Trading/app/MLearning/data/CèneDataTrading/
+    CSV_FILE = os.path.abspath(os.path.join(script_dir, "..", "data", "CèneDataTrading", "enriched_data.csv"))
+
     if not os.path.exists(CSV_FILE):
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        CSV_FILE = os.path.abspath(os.path.join(script_dir, "..", "..", "..", "data", "NewdataFinal_corrected.csv"))
-    
-    if not os.path.exists(CSV_FILE):
-        print(f"CRITICAL: Final Dataset not found at {CSV_FILE}")
-        print(f"Current Working Directory: {os.getcwd()}")
+        logger.error(f"enriched_data.csv introuvable : {CSV_FILE}")
+        logger.info("Lancer d'abord CryptoDataProcessor pour générer enriched_data.csv :")
+        logger.info("python -m app.MLearning.preprocessing.CryptoDataProcessor --input \"app/MLearning/data/btc_15m_data_2018_to_2025 (1).csv\" --output \"app/MLearning/data/CèneDataTrading\"")
         return
 
-    print(f"Using Dataset: {CSV_FILE}")
-    print("NOTE: Using Q-Labels as target for training and validation")
+    logger.info(f"Using Dataset: {CSV_FILE}")
+    logger.info("Using Q-Labels as target for training and validation")
     pipeline = AdvancedDataPipeline(csv_path=CSV_FILE, lookback=192, batch_size=128)
     
     try:
         train_loader, val_loader, test_loader, input_size = pipeline.load_and_prep()
     except Exception as e:
-        print(f"Pipeline failed: {e}")
+        logger.exception(f"Pipeline failed: {e}")
         return
 
     # Initialize Model
-    print(f"Initializing model with input_size={input_size}...")
+    logger.info(f"Initializing model with input_size={input_size}...")
     model = LSTM_Production_Model(input_size=input_size)
     
     # Initialize Trainer
-    trainer = Trainer(model=model, patience=10, learning_rate=0.001, accumulation_steps=4)
+    trainer = Trainer(model=model, patience=30, learning_rate=0.001, accumulation_steps=4)
     
     # Train
     trained_model = trainer.fit(train_loader, val_loader, epochs=100)
@@ -419,7 +423,9 @@ def main():
     # Save Model
     os.makedirs("models", exist_ok=True)
     torch.save(trained_model.state_dict(), "models/lstm_model.pth")
-    print("Model saved to models/lstm_model.pth")
+    joblib.dump(pipeline.scaler, "models/scaler.pkl")
+    logger.info("Model saved to models/lstm_model.pth")
+    logger.info("Scaler saved to models/scaler.pkl")
     
     # Quantize
     trainer.quantize_model("models/lstm_model_quantized.pth")

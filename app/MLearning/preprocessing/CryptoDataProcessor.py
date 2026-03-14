@@ -1,44 +1,68 @@
 import os
 import pandas as pd
 import numpy as np
-import joblib
 import argparse
+import logging
 import talib
-from sklearn.preprocessing import RobustScaler, MinMaxScaler
-from typing import Tuple, List, Optional
+from vmdpy import VMD
 from .LABELING import LABELING
 
-class CryptoDataProcessor:    
-    def __init__(self, 
-                 lookback: int = 96, 
-                 future_window: int = 4, 
-                 scaler_path: str = "artifacts/scaler.pkl"):
+logger = logging.getLogger(__name__)
+
+# Unique source de vérité : 21 features finales du modèle
+# Ordre identique à trainer.py et OnlineFeatureEngineer.py
+MODEL_FEATURES = [
+    # 14 colonnes scalées
+    'Open_diff', 'High_diff', 'Low_diff', 'Close_diff',
+    'dist_ema_50', 'dist_ema_200',
+    'atr_ratio',
+    'macd_norm', 'macd_sig_norm', 'macd_hist_norm',
+    'Volume_log',
+    'VMD_Mode1_diff', 'VMD_Mode2', 'VMD_Mode3',
+    # déjà normalisées
+    'hour_sin', 'hour_cos',
+    'day_of_week_sin', 'day_of_week_cos',
+    'month_sin', 'month_cos',
+    'rsi_norm',
+]
+
+
+class CryptoDataProcessor:
+    def __init__(self,
+                 lookback: int = 192,
+                 future_window: int = 4):
 
         self.lookback = lookback
         self.future_window = future_window
         self.labeler = LABELING(future_window=future_window)
-        self.scaler_path = scaler_path
-        self.scaler = RobustScaler()
-        self.feature_cols = []
-        
-        os.makedirs(os.path.dirname(self.scaler_path), exist_ok=True)
 
     def load_data(self, filepath: str) -> pd.DataFrame:
-        print(f"Loading data from {filepath}...")
+        logger.info(f"Loading data from {filepath}...")
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"File not found: {filepath}")
-            
+
         data = pd.read_csv(filepath)
-        
-        for col in ['Open time', 'Close time']:
+
+        # Garder uniquement les colonnes brutes nécessaires
+        keep_cols = [c for c in ['Open time', 'Open', 'High', 'Low', 'Close', 'Volume'] if c in data.columns]
+        data = data[keep_cols].copy()
+
+        if 'Open time' in data.columns:
+            data['Open time'] = pd.to_datetime(data['Open time'])
+            data = (data
+                    .sort_values('Open time')
+                    .drop_duplicates(subset='Open time')
+                    .reset_index(drop=True))
+
+        for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
             if col in data.columns:
-                data[col] = pd.to_datetime(data[col])
-            
+                data[col] = data[col].astype(float)
+
+        logger.info(f"Données chargées : {len(data)} bougies.")
         return data
 
     def add_Seasonal_features(self, df: pd.DataFrame) -> pd.DataFrame:
-
-        print("Engineering features...")
+        logger.info("Engineering features...")
         data = df.copy()
                 
         data['Open_diff'] = data['Open'].diff()
@@ -64,7 +88,7 @@ class CryptoDataProcessor:
         return data
 
     def calculate_technical_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
-        print("Calculating technical indicators (Production Parity)...")
+        logger.info("Calculating technical indicators (Production Parity)...")
         data = df.copy()
         
         closes = data['Close'].values.astype(float)
@@ -96,269 +120,131 @@ class CryptoDataProcessor:
         return data
 
     def create_positional_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        print("Creating Positional Context features...")
+        logger.info("Creating positional & volume features...")
         data = df.copy()
         
         epsilon = 1e-9
         
-        # 1. Log-Distances to EMAs (Price Position)
+        # Log-distances aux EMAs (normalisation scale-invariante par rapport au prix)
         data['dist_ema_20'] = np.log((data['Close'] + epsilon) / (data['ema_20'] + epsilon))
         data['dist_ema_50'] = np.log((data['Close'] + epsilon) / (data['ema_50'] + epsilon))
-        # Handle potential NaNs in EMA200 by filling or just letting dropna handle it later
         data['dist_ema_200'] = np.log((data['Close'] + epsilon) / (data['ema_200'] + epsilon))
         
-        # Normalized RSI
+        # RSI normalisé [0, 1]
         data['rsi_norm'] = data['rsi_14'] / 100.0
         
-        # Normalized ATR (Volatility Ratio)
+        # Volatilité relative
         data['atr_ratio'] = data['atr_14'] / data['Close']
         
-        # Normalized MACD
+        # MACD normalisé par le prix (scale-invariant)
         data['macd_norm'] = data['macd_line'] / data['Close']
         data['macd_sig_norm'] = data['macd_signal'] / data['Close']
         data['macd_hist_norm'] = data['macd_hist'] / data['Close']
         
+        # Volume log (compresse les spikes extrêmes)
+        data['Volume_log'] = np.log1p(data['Volume'])
+
         return data
 
-        #def calculate_q_labels(self, data: pd.DataFrame) -> pd.DataFrame:
-        #    # Note: data should have the diff columns if that is what we want to rely on
-        #    # The user code accessed 'Close_diff' etc.
-        #    closes = data['Close_diff'].values
-        #    highs = data['High_diff'].values
-        #    lows = data['Low_diff'].values
-        #    opens = data['Open_diff'].values
-        #    
-        #    # Check if Volume exists
-        #    if 'Volume' in data.columns:
-        #        volumes = data['Volume'].values
-        #    else:
-        #        volumes = np.zeros_like(closes)
-    #
-        #    q_standard = []
-        #    q_vwap = []
-        #    q_gap = []
-        #    
-        #    # Use self.future_window
-        #    fw = self.future_window
-        #    n = len(closes)
-        #    
-        #    for t in range(n - fw):
-        #        f_highs = highs[t+1 : t+1+fw]
-        #        f_lows = lows[t+1 : t+1+fw]
-        #        f_closes = closes[t+1 : t+1+fw]
-        #        f_opens = opens[t+1 : t+1+fw]
-        #        f_volumes = volumes[t+1 : t+1+fw]
-        #        
-        #        final_close = closes[t+fw]
-        #        
-        #        # Label Q Standard
-        #        HH = np.max(f_highs)
-        #        LL = np.min(f_lows)
-        #        
-        #        if HH == LL:
-        #            q_std = 0.5
-        #        else:
-        #            q_std = (final_close - LL) / (HH - LL)
-        #            
-        #        # Label Q VWAP (Volume Weighted) 
-        #        total_vol = np.sum(f_volumes)
-        #        if total_vol == 0:
-        #             vwap_val = np.mean(f_closes) 
-        #        else:
-        #             vwap_val = np.sum(f_closes * f_volumes) / total_vol
-        #             
-        #        if HH == LL:
-        #            q_v = 0.5
-        #        else:
-        #            q_v = (vwap_val - LL) / (HH - LL)
-        #            
-        #        # Label Q Gap-Adjusted
-        #        HH_true = np.max(np.maximum(f_highs, f_opens))
-        #        LL_true = np.min(np.minimum(f_lows, f_opens))
-        #        
-        #        if HH_true == LL_true:
-        #            q_g = 0.5
-        #        else:
-        #            q_g = (final_close - LL_true) / (HH_true - LL_true)
-        #            
-        #        q_standard.append(q_std)
-        #        q_vwap.append(q_v)
-        #        q_gap.append(q_g)
-        #    
-        #    pad = [np.nan] * fw
-        #    
-        #    # We should append these to 'data'
-        #    data['Label_Q_Standard'] = q_standard + pad
-        #    data['Label_Q_VWAP'] = q_vwap + pad
-        #    data['Label_Q_Gap'] = q_gap + pad
-        #    
-        #    return data
-    
-    def scale_features(self, df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray, List[str]]:
-        print("Scaling features...")
+    def apply_vmd(self, df: pd.DataFrame) -> pd.DataFrame:
+        logger.info("Applying VMD decomposition...")
         data = df.copy()
-        
-        # We focus on the NEW positional features + Seasonal
-        features = [
-            # Base Features
-            'Open_diff', 'High_diff', 'Low_diff', 'Close_diff','Volume'
 
-            # Positional / Context Features
-            'dist_ema_20', 'dist_ema_50', 'dist_ema_200',
-            'rsi_norm', 
-            'atr_ratio',
-            'macd_norm', 'macd_sig_norm', 'macd_hist_norm',
-            
-            # Seasonal Features 
-            'hour_sin', 'hour_cos', 
-            'day_of_week_sin', 'day_of_week_cos', 
-            'month_sin', 'month_cos',
-            
-            # Volume Log
-             'Volume_log'
-        ]
-        
-        if 'Volume' in data.columns:
-             data['Volume_log'] = np.log1p(data['Volume'])
-        
-        numeric_features = [f for f in features if f in data.columns]
-        
-        meta_features = ['Open time', 'Close time']
-        available_meta = [f for f in meta_features if f in data.columns]
-        
-        print(f"Selected numeric features for scaling: {numeric_features}")
-        print(f"Selected metadata features: {available_meta}")
-        
-        if numeric_features:
-            data[numeric_features] = self.scaler.fit_transform(data[numeric_features])
-        
-        print(f"Saving scaler to {self.scaler_path}...")
-        joblib.dump(self.scaler, self.scaler_path)
-        
-        final_columns = numeric_features + available_meta
-        X_scaled = data[final_columns].values
-        
-        if 'Label_Q_Standard' in data.columns:
-            y_labels = data['Label_Q_Standard'].values
-        else:
-            y_labels = np.zeros(len(data))
-        
-        return X_scaled, y_labels, final_columns
+        closes = data['Close'].values
+        alpha = 2000   # contrainte de bande passante
+        tau = 0.       # tolérance au bruit
+        K = 3          # 3 modes : tendance, oscillations moyennes, oscillations rapides
+        DC = 0
+        init = 1
+        tol = 1e-7
 
-    def create_sequences(self, X: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        print(f"Creating sequences (lookback={self.lookback})...")
-        X_out, y_out = [], []
-        
-        for i in range(self.lookback, len(X)):
-            X_out.append(X[i-self.lookback : i])
-            y_out.append(y[i])
-            
-        return np.array(X_out), np.array(y_out)
+        try:
+            u, u_hat, omega = VMD(closes, alpha, tau, K, DC, init, tol)
 
-    def split_and_balance(self, X: np.ndarray, y: np.ndarray) -> dict:
-        print("Splitting and balancing data...")
-        total = len(X)
-        train_idx = int(total * 0.80)
-        val_idx = int(total * 0.90)
-        
-        X_train_raw = X[:train_idx]
-        y_train_raw = y[:train_idx]
-        
-        X_val = X[train_idx:val_idx]
-        y_val = y[train_idx:val_idx]
-        
-        X_test = X[val_idx:]
-        y_test = y[val_idx:]
-        
-        bins = [-np.inf, 0.33, 0.66, np.inf]
-        y_train_series = pd.Series(y_train_raw)
-        
-        train_classes = pd.cut(y_train_series, bins=bins, labels=[0, 1, 2])
-        if train_classes.isna().any():
-            train_classes = train_classes.fillna(1)
-            
-        train_classes = train_classes.astype(int)
-        
-        class_counts = train_classes.value_counts()
-        min_class_count = class_counts.min()
-        
-        print(f"Class distribution before balancing: {class_counts.to_dict()}")
-        print(f"Downsampling to {min_class_count} samples per class...")
-        
-        balanced_indices = []
-        for cls in [0, 1, 2]:
-            cls_indices = np.where(train_classes == cls)[0]
-            if len(cls_indices) > 0:
-                 count = min(len(cls_indices), min_class_count)
-                 selected = np.random.choice(cls_indices, count, replace=False)
-                 balanced_indices.append(selected)
-            
-        if balanced_indices:
-            balanced_indices = np.concatenate(balanced_indices)
-            np.random.shuffle(balanced_indices)
-            
-            X_train = X_train_raw[balanced_indices]
-            y_train = y_train_raw[balanced_indices]
-        else:
-            X_train = X_train_raw
-            y_train = y_train_raw
-        
-        return {
-            "X_train": X_train, "y_train": y_train,
-            "X_val": X_val, "y_val": y_val,
-            "X_test": X_test, "y_test": y_test
-        }
+            target_len = len(data)
+
+            def _align_mode_length(mode: np.ndarray, n: int) -> np.ndarray:
+                mode = np.asarray(mode, dtype=float).reshape(-1)
+                m = len(mode)
+                if m == n:
+                    return mode
+                if m < n:
+                    pad_count = n - m
+                    if m == 0:
+                        return np.zeros(n, dtype=float)
+                    return np.pad(mode, (pad_count, 0), mode='edge')
+                return mode[-n:]
+
+            mode1 = _align_mode_length(u[0, :], target_len)
+            mode2 = _align_mode_length(u[1, :], target_len)
+            mode3 = _align_mode_length(u[2, :], target_len)
+
+            data['VMD_Mode1'] = mode1
+            data['VMD_Mode2'] = mode2
+            data['VMD_Mode3'] = mode3
+
+            # Mode1 = tendance longue (non-stationnaire) → diff pour la stationnariser
+            data['VMD_Mode1_diff'] = data['VMD_Mode1'].diff()
+        except Exception as e:
+            logger.exception(f"[CryptoDataProcessor] Erreur VMD : {e} — fallback à zéro.")
+            data['VMD_Mode1_diff'] = 0.0
+            data['VMD_Mode2'] = 0.0
+            data['VMD_Mode3'] = 0.0
+
+        return data
 
     def run_pipeline(self, input_path: str, output_dir: str):
+        # 1. Chargement et nettoyage brut
         df = self.load_data(input_path)
-        
-        #Feature Engineering
+
+        # 2. Feature engineering
         df = self.add_Seasonal_features(df)
         df = self.calculate_technical_indicators(df)
         df = self.create_positional_features(df)
-        
-        # Labeling
+        df = self.apply_vmd(df)
+
+        # 3. Labeling — Target = Label_Q_Standard
         df = self.labeler.calculate_q_labels(df)
-        
-        # Cleaning
+        df = df.rename(columns={'Label_Q_Standard': 'Target'})
+
+        # 4. Nettoyage final (NaN dus aux indicateurs + future window du label)
         df_clean = df.dropna().reset_index(drop=True)
-        print(f"Data shape after cleaning: {df_clean.shape}")
-        
-        # EXPORT FOR TRAINER (Crucial Step)
-        # We save the enriched data here so trainer.py can load it with all features
-        enriched_path = os.path.join(output_dir, "enriched_data.parquet")
-        print(f"Saving enriched data to {enriched_path}...")
-        df_clean.to_parquet(enriched_path)
-        
-        # Scaling
-        X_scaled, y_labels, cols = self.scale_features(df_clean)
-        
-        # Sequencing
-        X_seq, y_seq = self.create_sequences(X_scaled, y_labels)
-        
-        # Splitting
-        splits = self.split_and_balance(X_seq, y_seq)
-        
+        logger.info(f"Shape après nettoyage : {df_clean.shape}")
+
+        # 5. Vérification que toutes les features et la target sont présentes
+        missing = [c for c in MODEL_FEATURES + ['Target'] if c not in df_clean.columns]
+        if missing:
+            raise ValueError(f"Colonnes manquantes dans le dataset enrichi : {missing}")
+
+        # 6. Export CSV — trainer.py prend ce fichier en entrée
         os.makedirs(output_dir, exist_ok=True)
-        print(f"Saving processed data to {output_dir}...")
-        for name, arr in splits.items():
-            np.save(os.path.join(output_dir, f"{name}.npy"), arr)
-            print(f"Saved {name}: {arr.shape}")
-        
-        joblib.dump(cols, os.path.join(output_dir, "feature_names.pkl"))
-            
-        print("Pipeline completed successfully.")
+        output_path = os.path.join(output_dir, "enriched_data.csv")
+        df_clean.to_csv(output_path, index=False)
+        logger.info(f"Dataset enrichi sauvegardé : {output_path}")
+        logger.info(f"Colonnes exportées ({len(df_clean.columns)}) : {list(df_clean.columns)}")
+        logger.info("Pipeline terminé avec succès.")
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(name)s - %(message)s"
+    )
+
+    default_input = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "data", "btc_15m_data_2018_to_2025 (1).csv")
+    )
+    default_output = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "data", "CèneDataTrading")
+    )
+
     parser = argparse.ArgumentParser(description="Crypto Data Preprocessing Pipeline")
-    parser.add_argument("--input", type=str, default="data/raw/BTCUSDT.csv", help="Path to raw CSV")
-    parser.add_argument("--output", type=str, default="data/processed", help="Output directory")
+    parser.add_argument("--input", type=str, default=default_input, help="Chemin vers le CSV brut Binance")
+    parser.add_argument("--output", type=str, default=default_output, help="Dossier de sortie du dataset enrichi")
     args = parser.parse_args()
-    
-    # Adjust artifact path relative to this script
-    pipeline = CryptoDataProcessor(scaler_path="artifacts/scaler.pkl")
-    
+
+    pipeline = CryptoDataProcessor()
+
     if os.path.exists(args.input):
         pipeline.run_pipeline(args.input, args.output)
     else:
-        print(f"Input file not found at {args.input}. Please provide a valid path.")
+        logger.error(f"Fichier introuvable : {args.input}")
