@@ -1,44 +1,54 @@
-pydantic-settings==2.11.0
+# Web Framework
 fastapi==0.121.0
-websocket-client==1.9.0
-asyncio==3.4.3
-aio-pika==9.5.8
+uvicorn[standard]==0.27.1
 
+# Database
 SQLAlchemy==2.0.44
 alembic==1.18.1
-
-TA-Lib==0.6.8
 asyncpg==0.29.0
-uvicorn==0.27.1
+psycopg2-binary==2.9.11
+
+# Auth & Security
+PyJWT==2.8.0
+pyotp==2.9.0
+qrcode[pil]==7.4.2
+Pillow==10.1.0
+redis==5.0.1
+pydantic[email]
+cryptography
+slowapi
+python-multipart
+passlib[bcrypt]
+
+# Settings
+pydantic-settings==2.11.0
 python-dotenv==1.0.1
 
-newsdataapi==0.1.29
+# WebSocket & Async
 websockets==15.0.1
+websocket-client==1.9.0
+aio-pika==9.5.8
+asyncio==3.4.3
 
+# Data & ML
+TA-Lib==0.6.8
 transformers==4.57.3
+scikit-learn==1.7.0
+vmdpy==0.2
+mlflow==3.8.1
+
+# PyTorch (GPU)
 --extra-index-url https://download.pytorch.org/whl/cu129
 torch==2.8.0+cu129
 torchvision==0.23.0+cu129
 torchaudio==2.8.0+cu129
 
-scikit-learn==1.7.0
-
-vmdpy==0.2
-
-mlflow==3.8.1
-psycopg2-binary==2.9.11
-
+# LLM Providers
 google-genai==1.64.0
 openai==2.22.0
 
+# News
+newsdataapi==0.1.29
+
+# Scheduler
 APScheduler==3.11.2
-
-
-
-
-
-#requests==2.32.5
-#bs4==4.14.3
-#feedparser==6.0.12
-#aiohttp==3.9.3
-    
