@@ -41,4 +41,3 @@ class MarketData(BaseDataModel):
             "exchange_name": self.exchange_name
 
         }
->>>>>>> tut-002

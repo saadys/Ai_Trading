@@ -1,7 +1,7 @@
-from .Config import get_settings
+from .config import get_settings
 from .DatabaseManager import DatabaseManager
-from .Logger import Logger, logger
-from .Scheduler import Scheduler
+from .logger import Logger, logger
+#from .Scheduler import Scheduler
 from .SQLAlchemyHandler import SQLAlchemyHandler
 
 __all__ = [

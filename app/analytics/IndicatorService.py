@@ -35,13 +35,17 @@ class IndicatorService:
         )
 
     async def process_message(self, message: dict):
-        if message.get('symbol') != self.symbol:
+        payload_message = message.get('payload') if isinstance(message, dict) else None
+        if not isinstance(payload_message, dict):
+            payload_message = message if isinstance(message, dict) else {}
+
+        if payload_message.get('symbol') != self.symbol:
             return False
 
         try:
-            raw_close = message.get('close_price')
-            raw_high = message.get('high_price')
-            raw_low = message.get('low_price')
+            raw_close = payload_message.get('close_price')
+            raw_high = payload_message.get('high_price')
+            raw_low = payload_message.get('low_price')
 
             if raw_close is None:
                 return False

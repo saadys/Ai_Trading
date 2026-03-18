@@ -39,7 +39,7 @@ class NewsCollector:
                         )
                         envolloppe = {
                             "type" : "Data_News",
-                            "payload" : article.to_dict()
+                            "payload" : article.model_dump(mode="json")
                         }
                         
                         if self.queuemanager:

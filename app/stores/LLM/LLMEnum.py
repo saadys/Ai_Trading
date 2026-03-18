@@ -5,7 +5,8 @@ class LLMEnum(Enum):
     DEEPSEEK = "DEEPSEEK"
     OPENAI = "OPENAI"
     QWEN = "QWEN"
-    GEMINI = "gemini-3.1-pro-preview"
+    GEMINI = "gemini-2.5-flash"
+    MINIMAX_25= "minimax/minimax-m2.5:free"
 
 
 class DeepSeekEnum(Enum):

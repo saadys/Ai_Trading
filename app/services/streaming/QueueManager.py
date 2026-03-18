@@ -79,7 +79,9 @@ class QueueManager:
             # Type DIRECT : Tri strict. La clé doit correspondre exactement (ex: "error" va dans "error_queue").
             'alert_exchange': ExchangeType.DIRECT,
             # Exchange pour les messages morts (DLX)
-            'dlx_exchange': ExchangeType.DIRECT
+            'dlx_exchange': ExchangeType.DIRECT,
+            # Exchange DLX dédié aux prédictions LSTM
+            'dlx_lstm_exchange': ExchangeType.DIRECT
         }
         for exchange_name, exchange_type in exchanges_config.items():
 
@@ -102,17 +104,25 @@ class QueueManager:
             'sentiment_queue',          
             'lstm_predictions_queue',
             'backtest_queue',
-            'dead_letter_queue'
+            'dead_letter_queue',
+            'lstm_predictions_dead_letter_queue'
         ]
         
         for queue_name in queues_config:
             arguments = {'x-message-ttl': 3600000}
             
-            # Configuration spécifique pour la queue de sauvegarde (DLQ)
+            # Configuration spécifique pour la queue de sauvegarde (DLQ générale)
             if queue_name == 'database_saver_queue':
                 arguments.update({
                     'x-dead-letter-exchange': 'dlx_exchange',
                     'x-dead-letter-routing-key': 'dead_message'
+                })
+            
+            # Configuration spécifique pour LSTM predictions avec DLX dédiée
+            elif queue_name == 'lstm_predictions_queue':
+                arguments.update({
+                    'x-dead-letter-exchange': 'dlx_lstm_exchange',
+                    'x-dead-letter-routing-key': 'dead_message.lstm_prediction'
                 })
 
             print(f"DEBUG: Declaring queue '{queue_name}'...")
@@ -139,15 +149,16 @@ class QueueManager:
             # CONTEXT AGGREGATOR QUEUE : Reçoit TOUT pour agrégation
             ('market_data_exchange', 'context_aggregator_queue', 'market_data.#'),
             
-            # LSTM PREDICTIONS QUEUE : Reçoit que les preds pour DB saver et ContextAggregator
+            # LSTM PREDICTIONS QUEUE : Reçoit que les preds LSTM pour persistance dédiée
             ('market_data_exchange', 'lstm_predictions_queue', 'market_data.prediction.lstm'),
             
             # ALERT QUEUE
             ('indicator_exchange', 'alert_queue', ''),
             ('alert_exchange', 'alert_queue', 'high_priority'),
 
-            # DEAD LETTER QUEUE
-            ('dlx_exchange', 'dead_letter_queue', 'dead_message')
+            # DEAD LETTER QUEUES
+            ('dlx_exchange', 'dead_letter_queue', 'dead_message'),
+            ('dlx_lstm_exchange', 'lstm_predictions_dead_letter_queue', 'dead_message.lstm_prediction')
         ]
         
         for exchange_name, queue_name, routing_key in bindings:

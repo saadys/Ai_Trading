@@ -4,6 +4,7 @@ from .PromptBuilder import PromptBuilder
 from .LLMProviderFactory import LLMProviderFactory
 from .providers.GeminiProvider import GeminiProvider
 from .providers.DeepSeekProvider import DeepSeekProvider
+from .providers.MiniMaxProvider import MiniMaxProvider
 
 __all__ = [
     "LLMInterface",
@@ -13,4 +14,5 @@ __all__ = [
     "LLMProviderFactory",
     "GeminiProvider",
     "DeepSeekProvider",
+    "MiniMaxProvider",
 ]

@@ -30,6 +30,9 @@ class MarketDataCollector:
             message = json.loads(message)
             kline = message['k']
 
+            if not kline.get('x', False):
+                return
+
             raw_data = {
                 'symbol': kline['s'],
                 'open_time': datetime.fromtimestamp(kline['t'] / 1000),

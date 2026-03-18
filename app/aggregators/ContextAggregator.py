@@ -12,7 +12,6 @@ from app.controllers.PredLSTMControllers import lstm_controller
 from app.core.logger import Logger, logger
 from pydantic import ValidationError
 from datetime import datetime
-logger = Logger()
 
 class ContextAggregator:
     def __init__(self,queuemanager: QueueManager):
@@ -26,8 +25,22 @@ class ContextAggregator:
             "account": {}
         }
         
-        # Initialisation de l'ingénieur de variables ML en streaming
         self.feature_engineer = OnlineFeatureEngineer()
+
+    def get_ml_health(self) -> dict:
+        feature_health = self.feature_engineer.get_health()
+        model_loaded = lstm_controller.model is not None
+        return {
+            "ready": bool(model_loaded and feature_health.get("scaler_loaded")),
+            "degraded": not bool(model_loaded and feature_health.get("scaler_loaded")),
+            "model_loaded": model_loaded,
+            "scaler_loaded": feature_health.get("scaler_loaded"),
+            "scaler_path": feature_health.get("scaler_path"),
+            "scaler_error": feature_health.get("scaler_error"),
+            "feature_buffer_ready": feature_health.get("buffer_ready"),
+            "feature_buffer_size": feature_health.get("buffer_size"),
+            "lookback": feature_health.get("lookback")
+        }
         
 
     async def start(self):
@@ -88,54 +101,63 @@ class ContextAggregator:
                 "low": validated_data.low_price,
                 "close": validated_data.close_price,
                 "volume": validated_data.volume,
-                "open_time": validated_data.open_time.isoformat(),
+                "open_time": validated_data.open_time,
                 "close_time": validated_data.close_time.isoformat(),
                 "is_closed": validated_data.is_closed
             }
             
             logger.info(f"OHLCV validé et mis à jour - Symbol: {validated_data.symbol}, Close: {validated_data.close_price}")
             
-            # 1. Ajouter la bougie au buffer d'ingénierie
-            self.feature_engineer.add_candle(self.state["OHLCV"])
-            
-            # 2. Si le buffer a assez d'historique (192+), extraire les features et prédire
-            if self.feature_engineer.is_ready():
-                try:
-                    features_tensor = self.feature_engineer.get_features()
-                    if features_tensor is not None:
-                        # La features_tensor est de forme (1, 192, 21), lstm_controller s'attend à du plat ou list[list]
-                        # On cast en liste pour le pred controller
-                        features_list = features_tensor.tolist()
-                        
-                        # lstm_controller.predict gère automatiquement le reshape via torch.tensor
-                        lstm_result = lstm_controller.predict(features_list[0], threshold=0.5)
-                        
-                        if lstm_result.get("status"):
-                            prediction_payload = {
-                                "type": "ml_prediction",
-                                "payload": {
+            # 1. Ajouter la bougie au buffer uniquement si elle est clôturée (évite les ticks partiels)
+            if self.state["OHLCV"].get("is_closed"):
+                self.feature_engineer.add_candle(self.state["OHLCV"])
+
+                # 2. Si le buffer a assez d'historique (192+), extraire les features et prédire
+                if self.feature_engineer.is_ready():
+                    if self.feature_engineer.scaler is None:
+                        logger.warning("ML dégradé: scaler indisponible, inférence LSTM ignorée.")
+                        return None
+
+                    if lstm_controller.model is None:
+                        logger.warning("ML dégradé: modèle LSTM indisponible, inférence ignorée.")
+                        return None
+
+                    try:
+                        features_array = self.feature_engineer.get_features()
+                        if features_array is not None:
+                            # features_array est de forme (1, 192, 21) (np.ndarray)
+                            features_list = features_array.tolist()
+
+                            lstm_result = lstm_controller.predict(features_list[0], threshold=0.5)
+
+                            if lstm_result.get("status"):
+                                # Mettre à jour l'état directement (sans attendre le roundtrip RabbitMQ)
+                                self.state["ml_prediction"] = {
                                     "symbol": validated_data.symbol,
                                     "timestamp": validated_data.close_time.isoformat(),
                                     "model": "LSTM_Production_Model",
                                     "prediction": lstm_result.get("prediction"),
                                     "probability": lstm_result.get("probability")
                                 }
-                            }
-                            # 3. Publier asynchronement au RabbitMQ pour sauvegarde & broadcast
-                            await self.queue.publish(
-                                exchange_name='market_data_exchange',
-                                message=prediction_payload,
-                                routing_key='market_data.prediction.lstm'
-                            )
-                            logger.info(
-                                f"\n{'='*40}\n"
-                                f"   PRÉDICTION LSTM EN DIRECT \n"
-                                f"   Signal : {lstm_result.get('prediction')}\n"
-                                f"   Probabilité : {lstm_result.get('probability')}\n"
-                                f"{'='*40}\n"
-                            )
-                except Exception as ml_err:
-                    logger.error(f"Erreur lors de l'inférence LSTM: {ml_err}")
+                                prediction_payload = {
+                                    "type": "ml_prediction",
+                                    "payload": self.state["ml_prediction"]
+                                }
+                                # Publier asynchronement au RabbitMQ pour sauvegarde & broadcast
+                                await self.queue.publish(
+                                    exchange_name='market_data_exchange',
+                                    message=prediction_payload,
+                                    routing_key='market_data.prediction.lstm'
+                                )
+                                logger.info(
+                                    f"\n{'='*40}\n"
+                                    f"   PRÉDICTION LSTM EN DIRECT \n"
+                                    f"   Signal : {lstm_result.get('prediction')}\n"
+                                    f"   Probabilité : {lstm_result.get('probability')}\n"
+                                    f"{'='*40}\n"
+                                )
+                    except Exception as ml_err:
+                        logger.error(f"Erreur lors de l'inférence LSTM: {ml_err}")
                     
         except ValidationError as ve:
             logger.error(f"Erreur validation OHLCV (Pydantic): {ve}")

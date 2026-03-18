@@ -1,4 +1,4 @@
-from  pydantic import BaseModel, Field
+from  pydantic import BaseModel, Field, ConfigDict
 from typing import Optional
 from datetime import datetime
 
@@ -13,6 +13,5 @@ class DataValidator(BaseModel):
     close_time: datetime = Field(..., description="Timestamp de fermeture de la bougie")
     is_closed: bool = Field(..., description="Indique si la bougie est clôturée")
     
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
     

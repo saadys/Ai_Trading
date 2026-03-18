@@ -80,6 +80,7 @@ class LLMController:
             new_provider = LLMProviderFactory(self.settings).create(enum_member)
             
             self.app.llm_provider = new_provider
+            self.app.active_llm_provider = enum_member
             
             logger.info(f"[LLMController] Provider LLM changé avec succès vers {enum_member.name}")
             return {"message": f"Provider LLM changé avec succès vers {enum_member.name}"}

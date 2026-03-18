@@ -9,8 +9,6 @@ from .LABELING import LABELING
 
 logger = logging.getLogger(__name__)
 
-# Unique source de vérité : 21 features finales du modèle
-# Ordre identique à trainer.py et OnlineFeatureEngineer.py
 MODEL_FEATURES = [
     # 14 colonnes scalées
     'Open_diff', 'High_diff', 'Low_diff', 'Close_diff',
@@ -130,7 +128,6 @@ class CryptoDataProcessor:
         data['dist_ema_50'] = np.log((data['Close'] + epsilon) / (data['ema_50'] + epsilon))
         data['dist_ema_200'] = np.log((data['Close'] + epsilon) / (data['ema_200'] + epsilon))
         
-        # RSI normalisé [0, 1]
         data['rsi_norm'] = data['rsi_14'] / 100.0
         
         # Volatilité relative
@@ -194,7 +191,6 @@ class CryptoDataProcessor:
         return data
 
     def run_pipeline(self, input_path: str, output_dir: str):
-        # 1. Chargement et nettoyage brut
         df = self.load_data(input_path)
 
         # 2. Feature engineering

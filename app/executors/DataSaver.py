@@ -20,6 +20,11 @@ class DataSaver:
         self.data_news_batch = []
         self.ml_prediction_batch = []
         self.batch_size = batch_size
+        
+        # Stats observabilité
+        self.ml_prediction_processed = 0
+        self.ml_prediction_saved = 0
+        self.ml_prediction_errors = 0
 
     async def start(self):
         if not self.queue.connection or self.queue.connection.is_closed:
@@ -63,32 +68,67 @@ class DataSaver:
                     finally:
                         self.indicator_batch = []
 
-            elif message.get("type") == "DATA_NEWS":
+            elif message.get("type") in ("Data_News", "DATA_NEWS"):
                 self.data_news_batch.append(message["payload"])
                 
                 if len(self.data_news_batch) >= self.batch_size:
-                    logger.info(f"Batch DATA_NEWS full ({self.batch_size} items). Saving to DB...")
+                    logger.info(f"Batch Data_News full ({self.batch_size} items). Saving to DB...")
                     try:
                         await self.table_model.save_data_news_batch(self.data_news_batch)
-                        logger.info("DATA_NEWS Batch saved successfully.")
+                        logger.info("Data_News Batch saved successfully.")
                     except Exception as db_e:
-                        logger.error(f"Database error while saving DATA_NEWS: {db_e}", exc_info=True)
+                        logger.error(f"Database error while saving Data_News: {db_e}", exc_info=True)
                     finally:
                         self.data_news_batch = []
                         
             elif message.get("type") == "ml_prediction":
-                self.ml_prediction_batch.append(message["payload"])
+                self.ml_prediction_processed += 1
                 
-                # On peut choisir un batch plus petit pour la prédiction ML, ou garder le même
-                if len(self.ml_prediction_batch) >= 1: 
-                    # On sauvegarde la prédiction immédiatement (batch de 1) 
-                    # pour garder le focus sur la réactivité, car c'est un signal de trading.
-                    logger.info("New ML Prediction received. Saving to DB...")
+                event_id = message.get("event_id", "unknown")
+                event_version = message.get("event_version", 1)
+                payload = message.get("payload", {})
+                
+                if not payload or payload.get("prediction") is None:
+                    logger.warning(f"[LSTM] Payload invalide (event_id={event_id}). Ignoré.")
+                    self.ml_prediction_errors += 1
+                    return
+                
+                logger.info(
+                    f"\n{'='*50}\n"
+                    f" [DataSaver] Sauvegarde LSTM Prédiction \n"
+                    f"Event ID    : {event_id}\n"
+                    f"Symbol      : {payload.get('symbol', 'N/A')}\n"
+                    f"Prediction  : {payload.get('prediction')}\n"
+                    f"Probabilité : {payload.get('probability', 'N/A')}\n"
+                    f"{'='*50}\n"
+                )
+                
+                self.ml_prediction_batch.append({
+                    **payload,
+                    "event_id": event_id,
+                    "event_version": event_version
+                })
+                
+                if len(self.ml_prediction_batch) >= 1:
+                    logger.info("Sauvegarde LSTM immédiate (réactivité prioritaire)...")
                     try:
                         await self.table_model.save_ml_prediction_batch(self.ml_prediction_batch)
-                        logger.info("ML Prediction saved successfully.")
+                        self.ml_prediction_saved += 1
+                        logger.info(f" Prédiction sauvegardée (event_id={event_id})")
                     except Exception as db_e:
-                        logger.error(f"Database error while saving ML Prediction: {db_e}", exc_info=True)
+                        # Classification erreur pour observabilité
+                        error_str = str(db_e).lower()
+                        if any(term in error_str for term in ["connection", "timeout", "deadlock"]):
+                            logger.warning(
+                                f" Erreur temporaire DB (event_id={event_id}, retry). "
+                                f"Détail: {db_e}"
+                            )
+                        else:
+                            logger.error(
+                                f"Erreur permanente DB (event_id={event_id}, DLQ). "
+                                f"Détail: {db_e}"
+                            )
+                        self.ml_prediction_errors += 1
                     finally:
                         self.ml_prediction_batch = []
                         

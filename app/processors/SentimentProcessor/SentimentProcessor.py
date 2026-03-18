@@ -40,19 +40,22 @@ class SentimentProcessor():
             payload = message.get("payload")
 
             if msg_type == "Data_News":
+                title = ((payload or {}).get("title") or "")
+                contenu = ((payload or {}).get("content") or "")
+
                 logger.info(
                     f"\n{'='*40}\n"
-                    f"📰 NOUVELLE NEWS DÉTECTÉE 📰\n"
-                    f"Titre : {title[:50]}...\n"
+                    f" NOUVELLE NEWS DÉTECTÉE \n"
+                    f"Titre : {title[:50] if title else 'N/A'}...\n"
                     f"Source: {payload.get('source', 'News')}\n"
                     f"{'='*40}\n"
                 )
 
-                score,label = await self.strategy.analyse_News(Contenu)
+                score,label = await self.strategy.analyse_News(contenu)
 
                 Logger.info(
                     f"\n{'='*40}\n"
-                    f"🎯 ANALYSE SENTIMENT (FinBERT) 🎯\n"
+                    f" ANALYSE SENTIMENT (FinBERT) \n"
                     f"Sentiment   : {label}\n"
                     f"Probabilité : {score:.2f}\n"
                     f"{'='*40}\n"
@@ -64,7 +67,7 @@ class SentimentProcessor():
                         "symbol": payload.get("symbol", "BTCUSDT"),
                         "timestamp": datetime.now().isoformat(),
                         "title": title,
-                        "content": Contenu,
+                        "content": contenu,
                         "sentiment_score": score,
                         "sentiment_label": label,
                         "source": payload.get("source", "News")

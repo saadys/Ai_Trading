@@ -4,7 +4,9 @@ from pathlib import Path
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-ENV_FILE = os.path.join(BASE_DIR, ".env")
+ROOT_DIR = BASE_DIR.parent
+ENV_FILE_ROOT = os.path.join(ROOT_DIR, ".env")
+ENV_FILE_APP = os.path.join(BASE_DIR, ".env")
 
 class Settings(BaseSettings):
 
@@ -13,13 +15,13 @@ class Settings(BaseSettings):
 
 ############################## Config DB ##############################
 
-    #Postgres_Port : int = 5433
+    #Postgres_Port : int = 5432
     #Postgres_DBName : str = "postgres" #"Ai_Trading"
     #Postgres_Host : str = "localhost"
     #Postgres_User : str = "postgres"
     #Postgres_Password : str = "saadys"
-    Postgres_Port : int = 5433
-    Postgres_DBName : str = "Ai_Trading"
+    Postgres_Port : int = 5432
+    Postgres_DBName : str = "ai_trading"
     Postgres_Host : str = "localhost"
     Postgres_User : str = "postgres"
     Postgres_Password : str = "saadys"
@@ -32,11 +34,12 @@ class Settings(BaseSettings):
     QWEN_kEY : str = ""
     BINANCE_API_KEY : str = ""
     GEMINI_API_KEY : str = ""
-
+    NewsApi_Key: str = "pub_2a69ac0529274d0e9c92983cf2ffdbfd" 
     Model_Sentiment_Name : str = "yiyanghkust/finbert-tone"
+    MINIMAX_25_API_KEY : str = ""
 
     FINBERT_LABELS : list = ['Neutral','Positive', 'Negative']
-    model_config = SettingsConfigDict(env_file=ENV_FILE)
+    model_config = SettingsConfigDict(env_file=(ENV_FILE_ROOT, ENV_FILE_APP), extra="ignore")
 
 
 ############################## Config RabbitMQ ##############################

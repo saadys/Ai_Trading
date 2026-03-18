@@ -1,5 +1,5 @@
 import logging
-from app.models.log import Log, LogLevel
+#from app.models.db_schemas.mini_Trading.schemas import Log, LogLevel
 
 class SQLAlchemyHandler(logging.Handler):
     """

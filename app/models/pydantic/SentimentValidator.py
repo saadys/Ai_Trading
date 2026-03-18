@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional
 from datetime import datetime
 
@@ -10,5 +10,4 @@ class SentimentValidator(BaseModel):
     title: Optional[str] = Field(None, description="Titre de l'article analysé")
     source: Optional[str] = Field(None, description="Source de l'article (ex: Google News)")
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)

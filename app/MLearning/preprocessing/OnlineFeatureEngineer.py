@@ -17,16 +17,18 @@ class OnlineFeatureEngineer:
         self.lookback = lookback
         
         if scaler_path is None:
-            # On utilise le chemin relatif correct vers le dossier artifacts local
-            self.scaler_path = os.path.join(os.path.dirname(__file__), "artifacts", "scaler.pkl")
+            self.scaler_path = self._resolve_scaler_path()
         else:
             self.scaler_path = scaler_path
             
         print(f"[OnlineFeatureEngineer] Chargement du scaler depuis : {self.scaler_path}")
         try:
             self.scaler = joblib.load(self.scaler_path)
+            self.scaler_error = None
         except Exception as e:
-            raise RuntimeError(f"Impossible de charger le scaler ({self.scaler_path}): {e}")
+            self.scaler = None
+            self.scaler_error = str(e)
+            print(f"[OnlineFeatureEngineer] Scaler indisponible, passage en mode dégradé: {e}")
 
         self.buffer = []
 
@@ -43,6 +45,20 @@ class OnlineFeatureEngineer:
             'hour_sin', 'hour_cos', 'day_of_week_sin', 'day_of_week_cos', 'month_sin', 'month_cos',
             'rsi_norm',
         ]
+
+    @staticmethod
+    def _resolve_scaler_path() -> str:
+        current_dir = os.path.dirname(__file__)
+        candidates = [
+            os.path.join(current_dir, "artifacts", "scaler.pkl"),
+            os.path.abspath(os.path.join(current_dir, "..", "..", "..", "models", "scaler.pkl")),
+        ]
+
+        for candidate in candidates:
+            if os.path.exists(candidate):
+                return candidate
+
+        return candidates[0]
         
     def add_historical_data(self, history: List[dict]):
         for row in history:
@@ -61,12 +77,21 @@ class OnlineFeatureEngineer:
         
         self.buffer.append(formatted_candle)
         
-        # Garder seulement les buffer_size dernières bougies
         if len(self.buffer) > self.buffer_size:
             self.buffer.pop(0)
 
     def is_ready(self) -> bool:
         return len(self.buffer) >= self.lookback + 200 
+
+    def get_health(self) -> dict:
+        return {
+            "scaler_loaded": self.scaler is not None,
+            "scaler_path": self.scaler_path,
+            "scaler_error": self.scaler_error,
+            "buffer_size": len(self.buffer),
+            "lookback": self.lookback,
+            "buffer_ready": self.is_ready()
+        }
 
     def _apply_vmd(self, df: pd.DataFrame) -> pd.DataFrame:
         closes = df['Close'].values
@@ -94,6 +119,10 @@ class OnlineFeatureEngineer:
     def get_features(self) -> Optional[np.ndarray]:
         if not self.is_ready():
             print(f"[OnlineFeatureEngineer] Buffer insuffisant: {len(self.buffer)}/{self.lookback + 200}")
+            return None
+
+        if self.scaler is None:
+            print("[OnlineFeatureEngineer] Scaler indisponible: features ML non générées (mode dégradé).")
             return None
             
         # 1. Convertir le buffer en DataFrame

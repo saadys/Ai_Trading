@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List
 from datetime import datetime
 
@@ -16,5 +16,4 @@ class NewsCollectorValidator(BaseModel):
     symbol: str = Field(..., description="Symbole crypto concerné (ex: BTC)")
     timestamp: datetime = Field(..., description="Timestamp normalisé pour notre système")
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)

@@ -47,11 +47,13 @@ class StreamProcessor:
         
         while self.is_running:
             try:
-                raw_message = await self.internal_buffer.get()
+                raw_message = await asyncio.wait_for(self.internal_buffer.get(), timeout=0.5)
                 
                 await self.market_data_collector._process_raw_message(raw_message)
                 
                 self.internal_buffer.task_done()
+            except asyncio.TimeoutError:
+                continue
                 
             except Exception as e:
                 logger.error(f"An error occurred in processing loop: {e}")
@@ -68,7 +70,12 @@ class StreamProcessor:
             
             if not self.internal_buffer.empty():
                 logger.info(f"Draining buffer... {self.internal_buffer.qsize()} messages remaining.")
-                await self.internal_buffer.join()
+                while not self.internal_buffer.empty():
+                    try:
+                        self.internal_buffer.get_nowait()
+                        self.internal_buffer.task_done()
+                    except asyncio.QueueEmpty:
+                        break
             
             logger.info(f"StreamProcessor for {self.symbol} stopped successfully.")
             
@@ -78,9 +85,6 @@ class StreamProcessor:
     async def status(self) -> dict:
         return {
             "symbol": self.symbol,
-            "is_running": self.is_running,
-            "buffer_size": self.internal_buffer.qsize()
-        }
             "is_running": self.is_running,
             "buffer_size": self.internal_buffer.qsize()
         }

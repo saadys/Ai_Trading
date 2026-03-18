@@ -1,4 +1,5 @@
 import asyncio
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
@@ -41,9 +42,17 @@ from app.routers.streaming_routers import streaming_router
 from app.routers.LLMRouters import llm_router
 from app.routers.base import base_router
 from app.routers.PredLSTMRouters import router as pred_lstm_router
-from app.models.db_schemas.mini_Trading.schemas import SQLAlchemyBase
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await startup_event()
+    try:
+        yield
+    finally:
+        await shutdown_event()
+
+
+app = FastAPI(lifespan=lifespan)
 
 app.include_router(streaming_router)
 app.include_router(llm_router)
@@ -70,15 +79,15 @@ async def AGG_Decision_LLM():
                 validated_decision = LLMResponseValidator(**raw_decision)
                 final = validated_decision.model_dump()
             except ValidationError as e:
-                logger.error(f"[LLM] Erreur de validation Pydantic dans main.py : {e}")
+                logger.error(f"LLM Erreur de validation Pydantic dans main.py : {e}")
                 final = {"action": "HOLD", "confidence_score": 0.0, "risk_assessment": "EXTREME", "reasoning": "Validation Error in main.py"}
             except Exception as e:
-                logger.error(f"[LLM] Erreur inattendue lors de la validation : {e}")
+                logger.error(f"LLM Erreur inattendue lors de la validation : {e}")
                 final = {"action": "HOLD", "confidence_score": 0.0, "risk_assessment": "EXTREME", "reasoning": "Unexpected Error in Validation"}
 
             logger.info(
                 f"\n{'='*50}\n"
-                f" DÉCISION IA FINALE (GEMINI + LSTM) \n"
+                f" DÉCISION IA FINALE ({app.active_llm_provider.name} + LSTM) \n"
                 f"Action    : {final.get('action')}\n"
                 f"Confiance : {final.get('confidence_score')} %\n"
                 f"Risque    : {final.get('risk_assessment')}\n"
@@ -93,7 +102,6 @@ async def AGG_Decision_LLM():
 
 
 # Startup
-@app.on_event("startup")
 async def startup_event():
     try:
         #Base de donnees POstgresSQl
@@ -101,10 +109,7 @@ async def startup_event():
         app.async_engine = create_async_engine(
             postgres_url
         )
-        
-        async with app.async_engine.begin() as conn:
-            await conn.run_sync(SQLAlchemyBase.metadata.create_all)
-        Logger.info("Tables de la base de données analysées/créées avec succès.")
+        # Schéma géré par Alembic — ne pas appeler create_all ici
 
         app.database_client = sessionmaker(
             bind=app.async_engine,
@@ -156,8 +161,21 @@ async def startup_event():
 
         #  LLM : PromptBuilder + Provider actif 
         app.prompt_builder = PromptBuilder()
-        app.llm_provider = LLMProviderFactory(settings).create(LLMEnum.GEMINI)
-        Logger.info(f"LLM Provider initialisé : {LLMEnum.GEMINI.name}")
+        if settings.MINIMAX_25_API_KEY:
+            app.active_llm_provider = LLMEnum.MINIMAX_25
+        elif settings.GEMINI_API_KEY:
+            app.active_llm_provider = LLMEnum.GEMINI
+            Logger.warning("MINIMAX_25_API_KEY vide — fallback automatique vers GEMINI.")
+        elif settings.DEEPSEEK_API_KEY:
+            app.active_llm_provider = LLMEnum.DEEPSEEK
+            Logger.warning("MINIMAX_25_API_KEY et GEMINI_API_KEY vides — fallback automatique vers DEEPSEEK.")
+        else:
+            raise ValueError(
+                "Aucune clé LLM valide trouvée. Renseigner MINIMAX_25_API_KEY, GEMINI_API_KEY ou DEEPSEEK_API_KEY."
+            )
+
+        app.llm_provider = LLMProviderFactory(settings).create(app.active_llm_provider)
+        Logger.info(f"LLM Provider initialisé : {app.active_llm_provider.name}")
 
         #  Scheduler Asynchrone 
         app.scheduler = AsyncIOScheduler()
@@ -176,7 +194,6 @@ async def startup_event():
         raise e
 
 # Shutdown
-@app.on_event("shutdown")
 async def shutdown_event():
     Logger.info("Arrêt de l'application...")
 
@@ -190,5 +207,4 @@ async def shutdown_event():
 
 
 app.include_router(base_router)
-app.include_router(streaming_router)
 app.include_router(auth_router)

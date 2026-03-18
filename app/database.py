@@ -1,10 +1,16 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
-from app.config import settings
-from app.auth.models import Base
 
-engine = create_engine(settings.postgres_url, pool_size=10, max_overflow=20, pool_pre_ping=True)
+from app.auth.models import Base
+from app.config import settings
+
+engine = create_engine(
+    settings.postgres_url,
+    pool_pre_ping=True,
+    future=True,
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
 
 def get_db() -> Session:
     db = SessionLocal()
@@ -13,5 +19,6 @@ def get_db() -> Session:
     finally:
         db.close()
 
-def create_tables():
+
+def create_tables() -> None:
     Base.metadata.create_all(bind=engine)

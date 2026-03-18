@@ -29,7 +29,7 @@ import joblib
 
 import mlflow
 
-mlflow.set_tracking_uri("postgresql://postgres:saadys@localhost:5433/mlflow_db")
+mlflow.set_tracking_uri("postgresql://postgres:saadys@localhost:5432/mlflow_db")
 mlflow.set_experiment("Cène (dernier repas)")
 
 

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 from datetime import datetime
 
@@ -22,7 +22,8 @@ class IndicatorValidator(BaseModel):
     macd_signal: Optional[float] = Field(None, description="Ligne Signal")
     macd_hist: Optional[float] = Field(None, description="Histogramme MACD")
 
-    @validator('rsi_14')
+    @field_validator('rsi_14')
+    @classmethod
     def validate_rsi(cls, v):
         if v is not None and (v < 0 or v > 100):
             raise ValueError(f"RSI invalide: {v}. Doit être entre 0 et 100.")
