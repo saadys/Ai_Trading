@@ -109,3 +109,7 @@ testsprite_tests/
 
 *.txt
 *.md
+
+# Tests (Ajouté à la demande, bien que les tests soient généralement versionnés)
+app/tests/
+app/test/
