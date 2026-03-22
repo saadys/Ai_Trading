@@ -43,6 +43,10 @@ from app.routers.LLMRouters import llm_router
 from app.routers.base import base_router
 from app.routers.PredLSTMRouters import router as pred_lstm_router
 
+# Metrics
+from app.utils.metrics import setup_metrics
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await startup_event()
@@ -53,6 +57,10 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+# Setup Prometheus metrics
+setup_metrics(app)
+
 
 app.include_router(streaming_router)
 app.include_router(llm_router)

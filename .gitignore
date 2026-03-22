@@ -62,7 +62,8 @@ mlruns.db
 .mlflowui
 artifacts/
 ml_artifacts/
-app/mlruns/
+**/mlruns/
+app/MLearning/Training/mlruns/
 
 # Logs & Artifacts
 logs/
