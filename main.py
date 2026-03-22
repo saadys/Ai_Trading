@@ -209,9 +209,21 @@ async def shutdown_event():
         app.scheduler.shutdown()
         Logger.info("Scheduler arrêté.")
 
-    await app.queue_manager.disconnect()
+    try:
+        if hasattr(app, 'queue_manager'):
+            if hasattr(app.queue_manager, 'disconnect'):
+                await app.queue_manager.disconnect()
+            else:
+                await app.queue_manager.close()
+    except Exception as e:
+        Logger.error(f"Erreur lors de la fermeture RabbitMQ: {e}")
+
     # await app.database_client.dispose()
-    await app.async_engine.dispose()
+    try:
+        if hasattr(app, 'async_engine'):
+            await app.async_engine.dispose()
+    except Exception as e:
+        Logger.error(f"Erreur lors de la fermeture DB engine: {e}")
 
 
 app.include_router(base_router)

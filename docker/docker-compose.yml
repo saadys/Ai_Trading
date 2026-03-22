@@ -6,9 +6,8 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672"
-    environment:
-      RABBITMQ_DEFAULT_USER: "myadmin"
-      RABBITMQ_DEFAULT_PASS: "mypassword"
+    env_file:
+      - ./env/.env.rabbitmq
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq/
     restart: always
@@ -54,9 +53,8 @@ services:
   pgadmin:
     image: dpage/pgadmin4:latest
     container_name: pgadmin_server
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@example.com
-      PGADMIN_DEFAULT_PASSWORD: admin123
+    env_file:
+      - ./env/.env.pgadmin
     ports:
       - "5050:80"
     depends_on:
@@ -77,10 +75,9 @@ services:
       - "5000:5000"
     volumes:
       - mlflow_artifacts:/mlflow/artifacts
-    environment:
-      MLFLOW_BACKEND_STORE_URI: postgresql://postgres:saadys@db:5432/mlflow_db
-      MLFLOW_ARTIFACT_ROOT: /mlflow/artifacts
-    command: mlflow server --backend-store-uri postgresql://postgres:saadys@db:5432/mlflow_db --default-artifact-root /mlflow/artifacts --host 0.0.0.0
+    env_file:
+      - ./env/.env.mlflow
+    command: sh -c "mlflow server --backend-store-uri $${MLFLOW_BACKEND_STORE_URI} --default-artifact-root $${MLFLOW_ARTIFACT_ROOT} --host 0.0.0.0"
     restart: always
     networks:
       - mlflow-network

@@ -19,8 +19,8 @@ class QueueManager:
         self.exchanges: Dict[str, AbstractExchange] = {}
         self.queues: Dict[str, AbstractQueue] = {}
 
-        self.rabbitmq_host = 'localhost'
-        self.rabbitmq_port = 5672
+        self.rabbitmq_host = self.settings.RABBITMQ_HOST
+        self.rabbitmq_port = self.settings.RABBITMQ_PORT
         self.rabbitmq_user = self.settings.RABBITMQ_DEFAULT_USER
         self.rabbitmq_password = self.settings.RABBITMQ_DEFAULT_PASS
         
@@ -238,8 +238,13 @@ class QueueManager:
             if self.connection and not self.connection.is_closed:
                 await self.connection.close()
                 logger.info(" RabbitMQ connection closed")
+            self.channel = None
+            self.connection = None
         except Exception as e:
             logger.error(f" Error closing RabbitMQ connection: {e}")
+
+    async def disconnect(self):
+        await self.close()
 
     async def health_check(self):
 

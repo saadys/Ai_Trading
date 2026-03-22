@@ -43,6 +43,8 @@ class Settings(BaseSettings):
 
 
 ############################## Config RabbitMQ ##############################
+    RABBITMQ_HOST: str = "localhost"
+    RABBITMQ_PORT: int = 5672
     RABBITMQ_DEFAULT_VHOST : str = "/"
     #RABBITMQ_DEFAULT_VHOST : str = "localhost"
     RABBITMQ_DEFAULT_USER: str = "myadmin"

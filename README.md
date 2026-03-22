@@ -133,3 +133,241 @@ Gère l'interface avec l'Intelligence Artificielle générative pour le trading.
 Gère l'inférence via les modèles de Deep Learning.
 
 - `POST /api/v1/lstm/predict` : Permet d'envoyer un vecteur de features temporelles (séquence) au modèle LSTM pour obtenir une prédiction sur la trajectoire future des prix.
+
+---
+
+## Docker Setup (Infrastructure Complète)
+
+### Vue d'ensemble des Services
+
+Le projet inclut une stack Docker complète pour gérer tous les services d'infrastructure (base de données, messaging, ML tracking, monitoring).
+
+| Service | Description | Port | Accès Web |
+|---|---|---|---|
+| **PostgreSQL** | Base de données principale pour OHLCV et décisions | `5432` | — |
+| **RabbitMQ** | Message broker pour le pipeline asynchrone | `5672` / `15672` | http://localhost:15672 |
+| **MLflow** | Tracking et versioning des modèles IA | `5000` | http://localhost:5000 |
+| **pgAdmin** | Interface Web pour gérer PostgreSQL | `5050` | http://localhost:5050 |
+| **Prometheus** | Collecte des métriques système et app | `9090` | http://localhost:9090 |
+| **Grafana** | Visualization dashboard for metrics et alertes | `3000` | http://localhost:3000 |
+| **Node Exporter** | Export des métriques système (CPU, RAM, disque) | `9100` | — |
+| **Postgres Exporter** | Export des métriques PostgreSQL | `9187` | — |
+
+### 1. Setup des Fichiers d'Environnement
+
+Avant de lancer Docker, créez les fichiers d'environnement dans `docker/env/` :
+
+#### `docker/env/.env.postgres`
+```env
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=votre_mot_de_passe_secure
+POSTGRES_DB=Ai_Trading
+```
+
+#### `docker/env/.env.rabbitmq`
+```env
+RABBITMQ_DEFAULT_USER=guest
+RABBITMQ_DEFAULT_PASS=guest
+RABBITMQ_DEFAULT_VHOST=/
+```
+
+#### `docker/env/.env.pgadmin`
+```env
+PGADMIN_DEFAULT_EMAIL=admin@example.com
+PGADMIN_DEFAULT_PASSWORD=admin_password
+```
+
+#### `docker/env/.env.mlflow`
+```env
+MLFLOW_TRACKING_URI=postgresql://postgres:mot_de_passe@db:5432/Ai_Trading
+MLFLOW_BACKEND_STORE_URI=postgresql://postgres:mot_de_passe@db:5432/Ai_Trading
+MLFLOW_ARTIFACT_ROOT=/mlflow/artifacts
+```
+
+#### `docker/env/.env.grafana`
+```env
+GF_SECURITY_ADMIN_PASSWORD=admin_password
+GF_INSTALL_PLUGINS=grafana-piechart-panel
+```
+
+#### `docker/env/.env.postgres-exporter`
+```env
+DATA_SOURCE_NAME=postgresql://postgres:mot_de_passe@db:5432/Ai_Trading?sslmode=disable
+```
+
+### 1.1 Création rapide des fichiers d'environnement
+
+Si vous avez des fichiers `.env.example` dans le dossier, créez les fichiers de configuration en les copiant :
+
+```bash
+# Accédez au dossier docker/env
+cd docker/env
+
+# Copiez les fichiers d'exemple pour créer les fichiers de configuration
+cp .env.example.postgres .env.postgres
+cp .env.example.rabbitmq .env.rabbitmq
+cp .env.example.pgadmin .env.pgadmin
+cp .env.example.mlflow .env.mlflow
+cp .env.example.grafana .env.grafana
+cp .env.example.postgres-exporter .env.postgres-exporter
+
+# Éditez chaque fichier avec vos valeurs sensibles
+# Par exemple :
+# nano .env.postgres
+# nano .env.grafana
+```
+
+> **Important** : Ne commitez **jamais** les fichiers `.env` (clés sensibles) dans Git. Assurez-vous qu'ils sont dans `.gitignore`.
+
+### 2. Lancement de la Stack Docker
+
+#### 2.1 Démarrage complet avec build
+
+```bash
+# Position-toi dans le dossier docker (depuis la racine du projet)
+cd docker
+
+# Démarre tous les services avec rebuild des images
+docker compose up --build -d
+
+# Vérifie l'état des conteneurs
+docker compose ps
+
+# Affiche les logs en temps réel (Ctrl+C pour arrêter)
+docker compose logs -f
+```
+
+#### 2.2 Démarrage simple (sans rebuild)
+
+```bash
+# Si les images existent déjà
+cd docker
+docker compose up -d
+
+# Vérification rapide
+docker compose ps
+```
+
+#### 2.3 Lancement avec Alembic (migrations DB)
+
+Si vous utilisez Alembic pour les migrations :
+
+```bash
+# Accédez à la racine du projet
+cd .
+
+# Appliquez les migrations après que PostgreSQL soit prêt
+docker compose exec db alembic upgrade head
+
+# Vous pouvez aussi faire ça depuis votre env local
+alembic upgrade head
+```
+
+#### 2.4 Arrêt et nettoyage
+
+```bash
+# Arrête les services (garde les données)
+docker compose stop
+
+# Arrête et supprime les conteneurs
+docker compose down
+
+# Supprime aussi les volumes (ATTENTION : perte de données !)
+docker compose down -v
+
+# Affiche l'état
+docker compose ps
+```
+
+### 3. Accès aux Services
+
+Une fois Docker démarré, accéde aux services via les URLs suivantes :
+
+| Service | URL | Identifiants |
+|---|---|---|
+| **RabbitMQ Management** | http://localhost:15672 | guest / guest |
+| **pgAdmin (PostgreSQL UI)** | http://localhost:5050 | admin@example.com / admin_password |
+| **MLflow Tracking** | http://localhost:5000 | — |
+| **Prometheus** | http://localhost:9090 | — |
+| **Grafana Dashboard** | http://localhost:3000 | admin / admin_password |
+
+### 4. Volume Management
+
+Les données persistantes sont stockées dans des **volumes nommés** Docker :
+
+```bash
+# Voir tous les volumes
+docker volume ls
+
+# Inspecter un volume (emplacements des fichiers)
+docker volume inspect docker_postgres_data
+docker volume inspect docker_mlflow_artifacts
+docker volume inspect docker_grafana_data
+docker volume inspect docker_prometheus_data
+docker volume inspect docker_rabbitmq_data
+```
+
+#### Volumes Utilisés
+
+| Volume | Service | Données Stockées |
+|---|---|---|
+| `postgres_data` | PostgreSQL | Tables OHLCV, indicateurs, décisions |
+| `mlflow_artifacts` | MLflow | Modèles IA, métriques, run history |
+| `grafana_data` | Grafana | Dashboards, datasources, configurations |
+| `prometheus_data` | Prometheus | Métriques historiques collectées |
+| `rabbitmq_data` | RabbitMQ | Messages, queue persistantes |
+
+#### Backup des Données
+
+```bash
+# Exporter la base de données PostgreSQL
+docker exec postgres_db pg_dump -U postgres Ai_Trading > backup_ai_trading.sql
+
+# Sauvegarder les artefacts MLflow
+docker run --rm -v docker_mlflow_artifacts:/mlflow alpine tar czf backup_mlflow_artifacts.tar.gz -C /mlflow artifacts
+
+# Restaurer une base de données
+docker exec -i postgres_db psql -U postgres Ai_Trading < backup_ai_trading.sql
+```
+
+### 5. Monitoring & Logs
+
+```bash
+# Voir les logs d'un service spécifique
+docker compose logs -f postgres_db
+docker compose logs -f mlflow
+docker compose logs -f grafana
+
+# Accéder à une base de données en direct
+docker exec -it postgres_db psql -U postgres -d Ai_Trading
+
+# Tester la connectivité RabbitMQ
+docker exec -it rabbitmq rabbitmq-diagnostics -q check_running
+```
+
+### 6. Troubleshooting Docker
+
+**Erreur : "Port already in use"**
+```bash
+# Liste toutes les applications utilisant le port 5432
+netstat -ano | findstr :5432
+
+# Change le port du service dans docker-compose.yml
+# Ex: "5432:5432" → "5433:5432"
+docker compose up -d
+```
+
+**Les volumes ne se synchronisent pas**
+```bash
+# Force la reconstruction des conteneurs
+docker compose down
+docker volume prune -f
+docker compose up -d --force-recreate
+```
+
+**Logs confus ou erronés**
+```bash
+# Redémarre un service spécifique
+docker compose restart postgres_db
+docker compose restart mlflow
+```
