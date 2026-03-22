@@ -46,9 +46,9 @@ export PS1="\[\033[01;32m\][\u@\h:\w]\[\033[00m\]\n\$ "
     ```sql
     CREATE DATABASE "Ai_Trading";
     ```
-2.  Appliquer les migrations (création des tables) via Alembic :
+2.  Appliquer les migrations (création des tables) via Alembic. La configuration se trouve dans le sous-dossier `app/models/db_schemas/mini_Trading` :
     ```bash
-    alembic upgrade head
+    alembic -c app/models/db_schemas/mini_Trading/alembic.ini upgrade head
     ```
 
 ### Configuration des Outils de Téléchargement (Env Vars)
@@ -250,17 +250,17 @@ docker compose ps
 
 #### 2.3 Lancement avec Alembic (migrations DB)
 
-Si vous utilisez Alembic pour les migrations :
+Si vous utilisez Alembic pour les migrations (la configuration se trouve dans `app/models/db_schemas/mini_Trading`) :
 
 ```bash
 # Accédez à la racine du projet
 cd .
 
-# Appliquez les migrations après que PostgreSQL soit prêt
-docker compose exec db alembic upgrade head
+# Appliquez les migrations après que PostgreSQL soit prêt (si les fichiers y sont accessibles)
+docker compose exec db alembic -c app/models/db_schemas/mini_Trading/alembic.ini upgrade head
 
 # Vous pouvez aussi faire ça depuis votre env local
-alembic upgrade head
+alembic -c app/models/db_schemas/mini_Trading/alembic.ini upgrade head
 ```
 
 #### 2.4 Arrêt et nettoyage

@@ -7,6 +7,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+Robot-Trading2/
 Miniconda3-latest-Linux-x86_64
 Miniconda3-latest-Linux-x86_64.sh
 *.sh
