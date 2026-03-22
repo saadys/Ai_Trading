@@ -1,0 +1,249 @@
+from aio_pika.abc import AbstractConnection, AbstractChannel, AbstractExchange, AbstractQueue
+from aio_pika import connect_robust, ExchangeType, Message
+from app.core.config import Settings, get_settings
+from typing import Callable, Optional, Dict, Any
+import aio_pika
+import asyncio
+import json
+import logging
+import time
+
+logger = logging.getLogger(__name__)
+class QueueManager:
+    def __init__(self, settings: Optional[Settings] = None):
+        self.settings = settings or get_settings()
+
+        self.connection : Optional[AbstractConnection] = None
+        self.channel : Optional[AbstractChannel] = None
+
+        self.exchanges: Dict[str, AbstractExchange] = {}
+        self.queues: Dict[str, AbstractQueue] = {}
+
+        self.rabbitmq_host = 'localhost'
+        self.rabbitmq_port = 5672
+        self.rabbitmq_user = self.settings.RABBITMQ_DEFAULT_USER
+        self.rabbitmq_password = self.settings.RABBITMQ_DEFAULT_PASS
+        
+        logger.info("QueueManager initialized with configuration")
+    
+    async def connect(self):
+        if self.connection and not self.connection.is_closed:
+            logger.info("Already connected to RabbitMQ")
+            return        
+        try:
+            vhost = self.settings.RABBITMQ_DEFAULT_VHOST
+            if vhost == "localhost" or not vhost or vhost == "/":
+                vhost_path = ""
+            else:
+                vhost_path = vhost.lstrip('/')
+                
+            rabbitmq_url = f"amqp://{self.rabbitmq_user}:{self.rabbitmq_password}@{self.rabbitmq_host}:{self.rabbitmq_port}/{vhost_path}"
+            
+            self.connection = await connect_robust(rabbitmq_url)
+            self.channel = await self.connection.channel(publisher_confirms=True)
+            print(f"DEBUG: Connected to RabbitMQ at {self.rabbitmq_host}:{self.rabbitmq_port} [VHost: {vhost}]")
+            
+            await self.channel.set_qos(prefetch_count=10)
+            
+            logger.info(f" Successfully connected to RabbitMQ at {self.rabbitmq_host}:{self.rabbitmq_port}")
+            
+        except Exception as e:
+            logger.error(f"Failed to connect to RabbitMQ: {str(e)}")
+            raise
+
+    async def setup_broker(self):
+        if not self.channel:
+            raise RuntimeError("Must call connect() before setup_broker()")
+        
+        try:
+            # 1. Déclarer les exchanges
+            await self._declare_exchanges()
+            # 2. Déclarer les queues
+            await self._declare_queues()
+            
+            # 3. Créer les bindings (liaisons)
+            await self._create_bindings()
+            
+            logger.info(" Broker setup completed successfully")
+            
+        except Exception as e:
+            logger.error(f" Failed to setup broker: {e}")
+            raise
+    
+    async def _declare_exchanges(self):
+        exchanges_config = {
+            # Type TOPIC : Tri intelligent basé sur le sujet du message (ex: "market.btc", "market.eth")
+            'market_data_exchange': ExchangeType.TOPIC,
+            # Type FANOUT : Tri "Aveugle". Copie le message vers TOUTES les queues connectées.
+            'indicator_exchange': ExchangeType.FANOUT,   
+            # Type DIRECT : Tri strict. La clé doit correspondre exactement (ex: "error" va dans "error_queue").
+            'alert_exchange': ExchangeType.DIRECT,
+            # Exchange pour les messages morts (DLX)
+            'dlx_exchange': ExchangeType.DIRECT,
+            # Exchange DLX dédié aux prédictions LSTM
+            'dlx_lstm_exchange': ExchangeType.DIRECT
+        }
+        for exchange_name, exchange_type in exchanges_config.items():
+
+            exchange = await self.channel.declare_exchange(
+                exchange_name,
+                exchange_type,
+                durable=True  
+
+            )
+            self.exchanges[exchange_name] = exchange
+            print(f"DEBUG: Exchange '{exchange_name}' declared")
+            logger.info(f" Exchange '{exchange_name}' ({exchange_type.value}) declared")
+
+    async def _declare_queues(self):
+        queues_config = [
+            'indicator_queue',     
+            'database_saver_queue', 
+            'context_aggregator_queue',
+            'alert_queue',
+            'sentiment_queue',          
+            'lstm_predictions_queue',
+            'backtest_queue',
+            'dead_letter_queue',
+            'lstm_predictions_dead_letter_queue'
+        ]
+        
+        for queue_name in queues_config:
+            arguments = {'x-message-ttl': 3600000}
+            
+            # Configuration spécifique pour la queue de sauvegarde (DLQ générale)
+            if queue_name == 'database_saver_queue':
+                arguments.update({
+                    'x-dead-letter-exchange': 'dlx_exchange',
+                    'x-dead-letter-routing-key': 'dead_message'
+                })
+            
+            # Configuration spécifique pour LSTM predictions avec DLX dédiée
+            elif queue_name == 'lstm_predictions_queue':
+                arguments.update({
+                    'x-dead-letter-exchange': 'dlx_lstm_exchange',
+                    'x-dead-letter-routing-key': 'dead_message.lstm_prediction'
+                })
+
+            print(f"DEBUG: Declaring queue '{queue_name}'...")
+            queue = await self.channel.declare_queue(
+                queue_name,
+                durable=True,  
+                arguments=arguments  
+            )
+            self.queues[queue_name] = queue
+            print(f"DEBUG: Queue '{queue_name}' declared successfully")
+            logger.info(f" Queue '{queue_name}' declared")
+
+    async def _create_bindings(self):
+        bindings = [
+            # SENTIMENT QUEUE : Reçoit les news via pattern flexible
+            ('market_data_exchange', 'sentiment_queue', 'market_data.news.#'),
+            
+            # INDICATOR QUEUE : Reçoit OHLCV via pattern flexible
+            ('market_data_exchange', 'indicator_queue', 'market_data.ohlcv.#'),
+            
+            # DATABASE SAVER QUEUE : Reçoit TOUT pour sauvegarde complète
+            ('market_data_exchange', 'database_saver_queue', 'market_data.#'),
+            
+            # CONTEXT AGGREGATOR QUEUE : Reçoit TOUT pour agrégation
+            ('market_data_exchange', 'context_aggregator_queue', 'market_data.#'),
+            
+            # LSTM PREDICTIONS QUEUE : Reçoit que les preds LSTM pour persistance dédiée
+            ('market_data_exchange', 'lstm_predictions_queue', 'market_data.prediction.lstm'),
+            
+            # ALERT QUEUE
+            ('indicator_exchange', 'alert_queue', ''),
+            ('alert_exchange', 'alert_queue', 'high_priority'),
+
+            # DEAD LETTER QUEUES
+            ('dlx_exchange', 'dead_letter_queue', 'dead_message'),
+            ('dlx_lstm_exchange', 'lstm_predictions_dead_letter_queue', 'dead_message.lstm_prediction')
+        ]
+        
+        for exchange_name, queue_name, routing_key in bindings:
+            print(f"DEBUG: Binding '{queue_name}' to '{exchange_name}' with key '{routing_key}'...")
+            await self.queues[queue_name].bind(
+                self.exchanges[exchange_name],
+                routing_key
+            )
+            print(f"DEBUG: Bound '{queue_name}' successfully")
+            logger.info(f" Bound '{queue_name}' to '{exchange_name}' with key '{routing_key}'")
+
+    async def publish(self, exchange_name: str, message: Dict[str, Any], routing_key: str = ""):
+
+        if not self.channel:
+            raise RuntimeError("Must call connect() before publishing")
+        
+        try:
+            json_message = json.dumps(message, default=str)
+            
+            message_bytes = json_message.encode('utf-8')
+            
+            # 3. Créer le message RabbitMQ 
+            rabbitmq_message = Message(
+                message_bytes,
+                delivery_mode=2,  # si RabbitMQ crash les donnees vont etre stocker dans le disque
+                timestamp=time.time() #Temps réel 
+            )
+            
+            if exchange_name == "":
+                exchange = self.channel.default_exchange
+            else:
+                exchange = self.exchanges.get(exchange_name)
+                if not exchange:
+                    raise ValueError(f"Exchange '{exchange_name}' not found. Call setup_broker() first.")
+        
+            confirms = await exchange.publish(rabbitmq_message, routing_key=routing_key, mandatory=True)
+            
+            print(f"DEBUG: Message published to {exchange_name} with key {routing_key}. Confirmed: {confirms}")
+            logger.info(f" Message published to '{exchange_name}' (Key: {routing_key})")
+            
+        except Exception as e:
+            logger.error(f" Failed to publish message: {e}")
+            raise
+
+    async def consume(self, queue_name: str, on_message_callback: Callable[[Dict[str, Any]], None]):
+        if not self.channel:
+            raise RuntimeError("Must call connect() before consuming")
+        
+        queue = self.queues.get(queue_name)
+        if not queue:
+            raise ValueError(f"Queue '{queue_name}' not found. Call setup_broker() first.")
+    
+        async def message_handler(message: aio_pika.IncomingMessage):
+            try:
+                json_string = message.body.decode('utf-8')
+                
+                message_data = json.loads(json_string)
+                
+                await on_message_callback(message_data)
+                await message.ack()
+                #await asyncio.sleep(1)
+                
+                logger.debug(f" Message processed from '{queue_name}'")
+                
+            except Exception as e:
+                logger.error(f" Error processing message from '{queue_name}': {e}")
+                # Rejeter le message (il sera remis en queue ou envoyé en DLQ)
+                await message.nack(requeue=False)
+        
+        # Commencer la consommation
+        await queue.consume(message_handler)
+        logger.info(f" Started consuming from '{queue_name}'")
+
+    async def close(self):
+ 
+        try:
+            if self.connection and not self.connection.is_closed:
+                await self.connection.close()
+                logger.info(" RabbitMQ connection closed")
+        except Exception as e:
+            logger.error(f" Error closing RabbitMQ connection: {e}")
+
+    async def health_check(self):
+
+        try:
+            return self.connection and not self.connection.is_closed
+        except:
+            return False

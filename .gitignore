@@ -1,0 +1,152 @@
+# ======================
+# Environments
+# ======================
+.env
+.envrc
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+Miniconda3-latest-Linux-x86_64
+Miniconda3-latest-Linux-x86_64.sh
+*.sh
+
+# ======================
+# Python
+# ======================
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.egg
+.Python
+
+# ======================
+# IDE
+# ======================
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+*.sublime-workspace
+*.sublime-project
+
+# VS Code history
+.history/
+
+# ======================
+# Test & Coverage
+# ======================
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# ======================
+# Data (volumineux)
+# ======================
+data/
+*.csv
+*.xlsx
+*.xls
+
+# ======================
+# Models (volumineux - ne pas versionner)
+# ======================
+models/
+*.pth
+*.h5
+*.pkl
+*.pickle
+*.joblib
+*.whl
+
+# ======================
+# MLflow & Experiment Tracking
+# ======================
+mlruns/
+mlflow.db
+mlruns.db
+.mlflowui
+artifacts/
+ml_artifacts/
+app/mlruns/
+
+# ======================
+# Logs & Artifacts
+# ======================
+logs/
+*.log
+tmp/
+temp/
+*.tmp
+/artifacts/
+
+# ======================
+# OS
+# ======================
+.DS_Store
+Thumbs.db
+.Thumbs.db
+
+# ======================
+# PyCharm
+# ======================
+*.iml
+.idea/
+out/
+
+# ======================
+# Local development
+# ======================
+local_config.py
+config.local.py
+credentials.json
+
+# ======================
+# Cache files
+# ======================
+*.cache
+.cache/
+
+# ======================
+# Jupyter
+# ======================
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/
+
+# ======================
+# Installation artifacts
+# ======================
+dist/
+build/
+*.egg-info/
+
+# ======================
+# TestSprite
+# ======================
+testsprite_tests/
+
+# ======================
+# Other
+# ======================
+*.txt
+*.md
+
+# ======================
+# Tests
+# ======================
+app/tests/
+app/test/
+
+# ======================
+# Frontend
+# ======================
+frontend/node_modules/
