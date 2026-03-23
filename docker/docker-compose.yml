@@ -1,4 +1,23 @@
 services:
+  #  FastAPI Application
+  app:
+    build:
+      context: ../
+      dockerfile: docker/mini_Trading/Dockerfile
+    container_name: ai_trading_app
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./env/.env.app
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_started
+    networks:
+      - mlflow-network
+    restart: unless-stopped
+
   #rabbitmq:
   rabbitmq:
     image: "rabbitmq:3-management-alpine"
@@ -10,6 +29,12 @@ services:
       - ./env/.env.rabbitmq
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq/
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     restart: always
     networks:
       - mlflow-network
@@ -70,7 +95,8 @@ services:
       dockerfile: Dockerfile.mlflow
     container_name: mlflow_server
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     ports:
       - "5000:5000"
     volumes:
@@ -78,6 +104,12 @@ services:
     env_file:
       - ./env/.env.mlflow
     command: sh -c "mlflow server --backend-store-uri $${MLFLOW_BACKEND_STORE_URI} --default-artifact-root $${MLFLOW_ARTIFACT_ROOT} --host 0.0.0.0"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; urllib.request.urlopen('http://127.0.0.1:5000', timeout=3); sys.exit(0)"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     restart: always
     networks:
       - mlflow-network

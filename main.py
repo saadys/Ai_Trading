@@ -1,5 +1,6 @@
 import asyncio
 from contextlib import asynccontextmanager
+from datetime import datetime
 
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
@@ -191,11 +192,12 @@ async def startup_event():
             func=AGG_Decision_LLM,
             trigger='interval',
             minutes=15,
+            next_run_time=datetime.now(),
             id='llm_decision_15min',
             name='Décision LLM toutes les 15 minutes'
         )
         app.scheduler.start()
-        Logger.info("AsyncIOScheduler démarré — AGG_Decision_LLM() toutes les 15 minutes.")
+        Logger.info("AsyncIOScheduler démarré — AGG_Decision_LLM() immédiat puis toutes les 15 minutes.")
 
     except Exception as e:
         Logger.error(f"Erreur critique lors du démarrage : {str(e)}")
@@ -228,3 +230,10 @@ async def shutdown_event():
 
 app.include_router(base_router)
 # app.include_router(auth_router)
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    Logger.info("Lancement direct détecté: démarrage via uvicorn main:app")
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=False)
