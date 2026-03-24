@@ -1,5 +1,7 @@
 # Ai_Trading
 
+![Architecture des technologies Backend](docs/images/technologie_used_backend.png)
+
 Est une application d’analyse et d’exécution de stratégies de trading utilisant un pipeline complet de données de marché, des modèles de machine learning, des indicateurs techniques et un module d’aide à la décision basé sur LLM. Le projet suit une architecture propre et modulaire pour garantir une séparation claire entre la collecte des données, l’analyse, la prédiction et le trading.
 
 ## Exigences
