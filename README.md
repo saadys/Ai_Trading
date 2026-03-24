@@ -111,6 +111,10 @@ L'application expose plusieurs endpoints RESTful. Une fois l'application lancée
 👉 **Swagger UI** : [http://localhost:8000/docs](http://localhost:8000/docs)
 👉 **ReDoc** : [http://localhost:8000/redoc](http://localhost:8000/redoc)
 
+### Schéma des flux API
+
+![Schéma des routes API FastAPI](docs/images/api-routes-flow.png)
+
 ### Principales routes disponibles :
 
 #### 🔄 Streaming & Ingestion (WebSockets)
