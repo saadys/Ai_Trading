@@ -170,17 +170,17 @@ async def startup_event():
 
         #  LLM : PromptBuilder + Provider actif 
         app.prompt_builder = PromptBuilder()
-        if settings.MINIMAX_25_API_KEY:
-            app.active_llm_provider = LLMEnum.MINIMAX_25
-        elif settings.GEMINI_API_KEY:
+        if settings.GEMINI_API_KEY:
             app.active_llm_provider = LLMEnum.GEMINI
-            Logger.warning("MINIMAX_25_API_KEY vide — fallback automatique vers GEMINI.")
+        elif settings.MINIMAX_25_API_KEY:
+            app.active_llm_provider = LLMEnum.MINIMAX_25
+            Logger.warning("GEMINI_API_KEY vide — fallback automatique vers MINIMAX_25.")
         elif settings.DEEPSEEK_API_KEY:
             app.active_llm_provider = LLMEnum.DEEPSEEK
-            Logger.warning("MINIMAX_25_API_KEY et GEMINI_API_KEY vides — fallback automatique vers DEEPSEEK.")
+            Logger.warning("GEMINI_API_KEY et MINIMAX_25_API_KEY vides — fallback automatique vers DEEPSEEK.")
         else:
             raise ValueError(
-                "Aucune clé LLM valide trouvée. Renseigner MINIMAX_25_API_KEY, GEMINI_API_KEY ou DEEPSEEK_API_KEY."
+                "Aucune clé LLM valide trouvée. Renseigner GEMINI_API_KEY, MINIMAX_25_API_KEY ou DEEPSEEK_API_KEY."
             )
 
         app.llm_provider = LLMProviderFactory(settings).create(app.active_llm_provider)
@@ -228,7 +228,7 @@ async def shutdown_event():
         Logger.error(f"Erreur lors de la fermeture DB engine: {e}")
 
 
-app.include_router(base_router)
+app.include_router(base_router, tags=["Health & Info"])
 # app.include_router(auth_router)
 
 

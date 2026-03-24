@@ -46,10 +46,9 @@ class Settings(BaseSettings):
     RABBITMQ_HOST: str = "localhost"
     RABBITMQ_PORT: int = 5672
     RABBITMQ_DEFAULT_VHOST : str = "/"
-    #RABBITMQ_DEFAULT_VHOST : str = "localhost"
-    RABBITMQ_DEFAULT_USER: str = "myadmin"
-    RABBITMQ_DEFAULT_PASS:str = "mypassword"
-    #RABBITMQ_DEFAULT_PORTS: int = 5672
+    RABBITMQ_DEFAULT_USER: str = "guest"
+    RABBITMQ_DEFAULT_PASS: str = "guest"
+    RABBITMQ_CONSUMER_TIMEOUT: int = 30
 
     
 ############################## Config LLMS ##############################

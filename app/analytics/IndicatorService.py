@@ -39,7 +39,8 @@ class IndicatorService:
         if not isinstance(payload_message, dict):
             payload_message = message if isinstance(message, dict) else {}
 
-        if payload_message.get('symbol') != self.symbol:
+        # BUGFIX: Compare symbols case-insensitively (Binance sends BTCUSDT, enum stores btcusdt)
+        if payload_message.get('symbol', '').upper() != self.symbol.upper():
             return False
 
         try:

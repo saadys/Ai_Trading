@@ -7,6 +7,7 @@ import asyncio
 import json
 import logging
 import time
+from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 class QueueManager:
@@ -211,16 +212,27 @@ class QueueManager:
         if not queue:
             raise ValueError(f"Queue '{queue_name}' not found. Call setup_broker() first.")
     
+        # Récupérer le timeout depuis les settings
+        timeout_seconds = self.settings.RABBITMQ_CONSUMER_TIMEOUT
+    
         async def message_handler(message: aio_pika.IncomingMessage):
             try:
                 json_string = message.body.decode('utf-8')
                 
                 message_data = json.loads(json_string)
                 
-                await on_message_callback(message_data)
-                await message.ack()
-                #await asyncio.sleep(1)
+                # CORRECTION 2: Ajouter timeout sur la consommation
+                try:
+                    await asyncio.wait_for(
+                        on_message_callback(message_data),
+                        timeout=timeout_seconds
+                    )
+                except asyncio.TimeoutError:
+                    logger.error(f"Consumer timeout for '{queue_name}' after {timeout_seconds}s - Message rejected to DLX")
+                    await message.nack(requeue=False)  # Envoyer en DLX
+                    return
                 
+                await message.ack()
                 logger.debug(f" Message processed from '{queue_name}'")
                 
             except Exception as e:
@@ -230,7 +242,7 @@ class QueueManager:
         
         # Commencer la consommation
         await queue.consume(message_handler)
-        logger.info(f" Started consuming from '{queue_name}'")
+        logger.info(f" Started consuming from '{queue_name}' (timeout: {timeout_seconds}s)")
 
     async def close(self):
  
