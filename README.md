@@ -6,6 +6,12 @@ Is an application for analyzing and executing trading strategies using a complet
 
 ## Requirements
 
+### Diagrammes
+
+![Diagramme de sequence](docs/images/sequence-diagram.svg)
+
+![Diagramme de cas d'utilisation](docs/images/use-case-diagram.svg)
+
 ### Install Python using Miniconda
 
 1. Download and install Miniconda from:  
